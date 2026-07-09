@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Check, RefreshCw, QrCode, Download, RotateCcw, Trash, KeyRound, ExternalLink } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { ensureDefaultProfiles } from '@/lib/useSettings';
 import { syncPlaylists } from '@/lib/spotifyData';
+import TransitionManager from '@/components/settings/TransitionManager';
 
 const BLOCK_OPTIONS = [6, 12, 24, 48, 72];
 
@@ -16,6 +17,7 @@ export default function SettingsPage() {
   const [savingPin, setSavingPin] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [profiles, setProfiles] = useState([]);
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -63,6 +65,10 @@ export default function SettingsPage() {
     await updateSettings({ active_profil_id: null });
     setClearing(false);
   };
+
+  useEffect(() => {
+    base44.entities.StimmungsProfil.list('sort_order', 50).then(setProfiles).catch(() => {});
+  }, []);
 
   const guestUrl = `${window.location.origin}/wunsch`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(guestUrl)}`;
@@ -189,6 +195,14 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+      </Section>
+
+      {/* DJ Transitions */}
+      <Section title="DJ-Übergänge">
+        <p className="text-sm text-muted-foreground mb-4">
+          Definiere Crossfade-Übergänge und BPM-Sortierung für Profilwechsel.
+        </p>
+        <TransitionManager profiles={profiles} />
       </Section>
 
       {/* Staff PIN */}

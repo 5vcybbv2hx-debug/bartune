@@ -1,0 +1,45 @@
+{
+  "name": "UebergangsProfile",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Name"
+    },
+    "from_profil_id": {
+      "type": "string",
+      "title": "Von Profil ID"
+    },
+    "from_profil_name": {
+      "type": "string",
+      "title": "Von Profil Name"
+    },
+    "to_profil_id": {
+      "type": "string",
+      "title": "Nach Profil ID"
+    },
+    "to_profil_name": {
+      "type": "string",
+      "title": "Nach Profil Name"
+    },
+    "crossfade_seconds": {
+      "type": "number",
+      "title": "Crossfade Sekunden",
+      "default": 5
+    },
+    "transition_sound_url": {
+      "type": "string",
+      "title": "Transition Sound URL"
+    },
+    "bpm_sort": {
+      "type": "boolean",
+      "title": "BPM Sort",
+      "default": false
+    }
+  },
+  "required": [
+    "name",
+    "from_profil_id",
+    "to_profil_id"
+  ]
+}

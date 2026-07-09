@@ -44,6 +44,11 @@
     "staff_pin": {
       "type": "string",
       "title": "Mitarbeiter PIN"
+    },
+    "crossfade_seconds": {
+      "type": "number",
+      "title": "Crossfade Sekunden",
+      "default": 5
     }
   },
   "required": []

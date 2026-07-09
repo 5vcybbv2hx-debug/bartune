@@ -126,5 +126,5 @@ export function useQueue(player, spotifyConnected) {
     await loadQueue();
   }, [queue, loadQueue]);
 
-  return { queue, audioFeatures, skipErrorCount, addToQueue, removeFromQueue, reorderQueue, reload: loadQueue };
+  return { queue, audioFeatures, skipErrorCount, sessionId, addToQueue, removeFromQueue, reorderQueue, reload: loadQueue };
 }

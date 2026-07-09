@@ -5,7 +5,7 @@ import QueueList from '@/components/dj/QueueList';
 import AddSongSheet from '@/components/dj/AddSongSheet';
 import { useQueue } from '@/lib/useQueue';
 
-export default function DJPanel({ player, spotifyConnected, rotation }) {
+export default function DJPanel({ player, spotifyConnected, rotation, transitionActive, crossfadeSeconds, onCrossfadeChange, onBpmSort, sorting }) {
   const { queue, audioFeatures, skipErrorCount, addToQueue, removeFromQueue, reorderQueue } = useQueue(player, spotifyConnected);
   const [sheetOpen, setSheetOpen] = useState(false);
   const { toast } = useToast();
@@ -26,6 +26,9 @@ export default function DJPanel({ player, spotifyConnected, rotation }) {
         player={player}
         audioFeatures={audioFeatures}
         spotifyConnected={spotifyConnected}
+        crossfadeSeconds={crossfadeSeconds}
+        onCrossfadeChange={onCrossfadeChange}
+        transitionActive={transitionActive}
       />
 
       <QueueList
@@ -35,6 +38,8 @@ export default function DJPanel({ player, spotifyConnected, rotation }) {
         onAddClick={() => setSheetOpen(true)}
         player={player}
         rotation={rotation}
+        onBpmSort={onBpmSort}
+        sorting={sorting}
       />
 
       <AddSongSheet

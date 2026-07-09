@@ -1,20 +1,26 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { RefreshCw, Music2, Clock } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 import { base44 } from '@/api/base44Client';
 import MoodProfileCard from '@/components/MoodProfileCard';
 import DJPanel from '@/components/dj/DJPanel';
+import { useTransitions } from '@/lib/useTransitions';
 import { ensureDefaultProfiles, formatRemaining } from '@/lib/useSettings';
 import { syncPlaylists, activateProfile, getNextPlaylist } from '@/lib/spotifyData';
 
 export default function Cockpit() {
   const { settings, player, updateSettings, spotifyConnected } = useOutletContext();
+  const { toast } = useToast();
   const [profiles, setProfiles] = useState([]);
   const [rotation, setRotation] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState(null);
   const [activating, setActivating] = useState(null);
+  const [bpmSorting, setBpmSorting] = useState(false);
+
+  const { transitionActive, crossfadeSeconds, applyTransition, handleCrossfadeChange, sortQueueByBpm } = useTransitions(spotifyConnected);
 
   const loadAll = useCallback(async () => {
     const p = await ensureDefaultProfiles();
@@ -55,6 +61,7 @@ export default function Cockpit() {
     setActivating(profile.id);
     setMessage(null);
     try {
+      const fromProfileId = settings?.active_profil_id;
       const result = await activateProfile(profile, rotation, settings, player, updateSettings);
       if (result.error) {
         setMessage({ type: 'error', text: result.error });
@@ -63,6 +70,16 @@ export default function Cockpit() {
       } else {
         setMessage({ type: 'success', text: `"${result.chosen.playlist_name}" gestartet.` });
       }
+
+      // Apply DJ transition
+      const transitionResult = await applyTransition(fromProfileId, profile.id);
+      if (transitionResult) {
+        toast({
+          title: '🎚️ Übergang',
+          description: `${transitionResult.name || 'Standard'} · ${transitionResult.seconds}s Crossfade${transitionResult.bpm_sort ? ' · BPM-Sortiert' : ''}`,
+        });
+      }
+
       const r = await base44.entities.PlaylistRotation.list();
       setRotation(r);
     } catch (e) {
@@ -177,7 +194,25 @@ export default function Cockpit() {
 
         {/* Right: DJ Panel */}
         <div className="order-1 lg:order-2 lg:w-[45%]">
-          <DJPanel player={player} spotifyConnected={spotifyConnected} rotation={rotation} />
+          <DJPanel
+            player={player}
+            spotifyConnected={spotifyConnected}
+            rotation={rotation}
+            transitionActive={transitionActive}
+            crossfadeSeconds={crossfadeSeconds}
+            onCrossfadeChange={handleCrossfadeChange}
+            onBpmSort={async () => {
+              setBpmSorting(true);
+              const res = await sortQueueByBpm();
+              setBpmSorting(false);
+              if (res?.success) {
+                toast({ title: '🎵 Queue nach BPM sortiert', description: 'smoothster Flow' });
+              } else {
+                toast({ title: 'Sortierung nicht möglich', description: 'Queue ist leer oder keine Audio-Features verfügbar', variant: 'destructive' });
+              }
+            }}
+            sorting={bpmSorting}
+          />
         </div>
       </div>
 

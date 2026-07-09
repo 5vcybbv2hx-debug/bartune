@@ -10,7 +10,7 @@ function formatTime(ms) {
   return `${min}:${sec.toString().padStart(2, '0')}`;
 }
 
-export default function NowPlayingCard({ player, audioFeatures, spotifyConnected }) {
+export default function NowPlayingCard({ player, audioFeatures, spotifyConnected, crossfadeSeconds, onCrossfadeChange, transitionActive }) {
   const { playback, progress, loading, play, pause, next, previous, setVolume } = player;
 
   if (!spotifyConnected) {
@@ -79,7 +79,21 @@ export default function NowPlayingCard({ player, audioFeatures, spotifyConnected
               exit={{ opacity: 0, x: -40 }}
               transition={{ duration: 0.25 }}
             >
-              <p className="text-base font-mono font-bold truncate">{item?.name || 'Nichts läuft'}</p>
+              <p className="text-base font-mono font-bold truncate flex items-center gap-2">
+                <span className="truncate">{item?.name || 'Nichts läuft'}</span>
+                <AnimatePresence>
+                  {transitionActive && (
+                    <motion.span
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      className="shrink-0 px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[9px] font-mono animate-pulse"
+                    >
+                      🎚️ Übergang läuft...
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </p>
               <p className="text-xs text-muted-foreground truncate">
                 {item?.artists?.map(a => a.name).join(', ') || '—'}
               </p>
@@ -179,6 +193,28 @@ export default function NowPlayingCard({ player, audioFeatures, spotifyConnected
           className="flex-1 accent-primary h-1"
         />
       </div>
+
+      {/* Crossfade slider */}
+      {onCrossfadeChange !== undefined && (
+        <div className="mt-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-mono text-muted-foreground">🎚️ Übergang</span>
+            <span className="text-[10px] font-mono text-primary font-semibold">{crossfadeSeconds}s</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] text-muted-foreground/50 shrink-0">hart</span>
+            <input
+              type="range"
+              min="0"
+              max="12"
+              value={crossfadeSeconds}
+              onChange={(e) => onCrossfadeChange(parseInt(e.target.value))}
+              className="flex-1 accent-primary h-1"
+            />
+            <span className="text-[9px] text-muted-foreground/50 shrink-0">smooth</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

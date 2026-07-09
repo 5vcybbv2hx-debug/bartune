@@ -18,7 +18,7 @@ function formatDuration(ms) {
   return h > 0 ? `${h}h ${m}min` : `${m}min`;
 }
 
-export default function QueueList({ queue, onReorder, onRemove, onAddClick, player, rotation }) {
+export default function QueueList({ queue, onReorder, onRemove, onAddClick, player, rotation, onBpmSort, sorting }) {
   const items = queue.slice(0, 5);
   const totalQueueMs = queue.reduce((sum, q) => sum + (q.duration_ms || 0), 0);
 
@@ -41,12 +41,25 @@ export default function QueueList({ queue, onReorder, onRemove, onAddClick, play
           <h3 className="text-sm font-bold">Warteschlange</h3>
           <span className="text-xs text-muted-foreground font-mono">({queue.length})</span>
         </div>
-        {queue.length > 0 && (
-          <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            ca. {formatDuration(totalQueueMs)}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {onBpmSort && queue.length > 0 && (
+            <button
+              onClick={onBpmSort}
+              disabled={sorting}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-secondary/50 text-xs font-medium text-muted-foreground hover:text-primary transition disabled:opacity-50"
+              title="Queue nach BPM sortieren"
+            >
+              {sorting ? <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /> : '🎵'}
+              <span className="hidden sm:inline">BPM-Sort</span>
+            </button>
+          )}
+          {queue.length > 0 && (
+            <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              ca. {formatDuration(totalQueueMs)}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Queue items */}
