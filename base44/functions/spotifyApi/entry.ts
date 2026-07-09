@@ -84,10 +84,19 @@ Deno.serve(async (req) => {
         break;
       case 'searchTracks': {
         const q = encodeURIComponent(params.query);
-        url = `https://api.spotify.com/v1/search?q=${q}&type=track&limit=5`;
+        const limit = params.limit || 5;
+        url = `https://api.spotify.com/v1/search?q=${q}&type=track&limit=${limit}`;
         method = 'GET';
         break;
       }
+      case 'getAudioFeatures':
+        url = `https://api.spotify.com/v1/audio-features/${params.track_id}`;
+        method = 'GET';
+        break;
+      case 'addToQueue':
+        url = `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${params.track_id}`;
+        method = 'POST';
+        break;
       case 'addToPlaylist':
         url = `https://api.spotify.com/v1/playlists/${params.playlist_id}/tracks`;
         method = 'POST';

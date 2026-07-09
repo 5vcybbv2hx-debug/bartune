@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { RefreshCw, Music2, Clock, AlertCircle } from 'lucide-react';
+import { RefreshCw, Music2, Clock } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import MoodProfileCard from '@/components/MoodProfileCard';
+import DJPanel from '@/components/dj/DJPanel';
 import { ensureDefaultProfiles, formatRemaining } from '@/lib/useSettings';
 import { syncPlaylists, activateProfile, getNextPlaylist } from '@/lib/spotifyData';
 
@@ -82,7 +83,7 @@ export default function Cockpit() {
   const nextPreview = activeProfile ? getNextPlaylist(activeProfile, rotation) : null;
 
   return (
-    <div className="px-4 py-6 md:px-8 md:py-8 max-w-6xl mx-auto">
+    <div className="px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto">
       {/* Not connected banner */}
       {!spotifyConnected && (
         <div className="mb-6 rounded-2xl border border-accent/30 bg-accent/5 p-6 text-center">
@@ -126,60 +127,63 @@ export default function Cockpit() {
         </div>
       )}
 
-      {/* Mood profile grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-8">
-        {profiles.map(profile => (
-          <MoodProfileCard
-            key={profile.id}
-            profile={profile}
-            isActive={profile.id === settings?.active_profil_id}
-            playlistCount={profile.playlist_ids?.length || 0}
-            onClick={() => handleActivate(profile)}
-          />
-        ))}
-        {activating && (
-          <div className="fixed inset-0 flex items-center justify-center bg-background/80 z-50">
-            <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+      {/* Split layout: Profiles (55%) + DJ Panel (45%) */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left: Mood profiles */}
+        <div className="order-2 lg:order-1 lg:w-[55%]">
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4 mb-6">
+            {profiles.map(profile => (
+              <MoodProfileCard
+                key={profile.id}
+                profile={profile}
+                isActive={profile.id === settings?.active_profil_id}
+                playlistCount={profile.playlist_ids?.length || 0}
+                onClick={() => handleActivate(profile)}
+              />
+            ))}
           </div>
-        )}
-      </div>
 
-      {/* Next playlist preview */}
-      {activeProfile && nextPreview && (
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Clock className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-semibold text-muted-foreground">Als nächstes</h3>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              {nextPreview.playlist.playlist_cover ? (
-                <img src={nextPreview.playlist.playlist_cover} alt="" className="w-10 h-10 rounded-md object-cover" />
-              ) : (
-                <div className="w-10 h-10 rounded-md bg-secondary flex items-center justify-center">
-                  <Music2 className="w-4 h-4 text-muted-foreground" />
+          {/* Next playlist preview */}
+          {activeProfile && nextPreview && (
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="w-4 h-4 text-primary" />
+                <h3 className="text-sm font-semibold text-muted-foreground">Als nächstes</h3>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  {nextPreview.playlist.playlist_cover ? (
+                    <img src={nextPreview.playlist.playlist_cover} alt="" className="w-10 h-10 rounded-md object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-md bg-secondary flex items-center justify-center">
+                      <Music2 className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-mono font-semibold truncate">{nextPreview.playlist.playlist_name}</p>
+                    {nextPreview.available ? (
+                      <p className="text-xs text-success font-mono">verfügbar</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {formatRemaining(nextPreview.playlist.blocked_until)}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-              <div className="min-w-0">
-                <p className="text-sm font-mono font-semibold truncate">{nextPreview.playlist.playlist_name}</p>
-                {nextPreview.available ? (
-                  <p className="text-xs text-success font-mono">verfügbar</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {formatRemaining(nextPreview.playlist.blocked_until)}
-                  </p>
-                )}
               </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
 
-      {/* No device warning */}
-      {spotifyConnected && player?.playback && !player.playback.device && (
-        <div className="mt-4 flex items-center gap-2 px-4 py-3 rounded-xl bg-accent/10 border border-accent/30 text-accent text-sm">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>Öffne Spotify auf deinem Gerät und starte ein Lied, dann kannst du hier steuern.</span>
+        {/* Right: DJ Panel */}
+        <div className="order-1 lg:order-2 lg:w-[45%]">
+          <DJPanel player={player} spotifyConnected={spotifyConnected} rotation={rotation} />
+        </div>
+      </div>
+
+      {activating && (
+        <div className="fixed inset-0 flex items-center justify-center bg-background/80 z-50">
+          <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
         </div>
       )}
     </div>

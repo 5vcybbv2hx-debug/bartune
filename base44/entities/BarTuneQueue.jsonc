@@ -1,0 +1,56 @@
+{
+  "name": "BarTuneQueue",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "title": "Session ID"
+    },
+    "track_id": {
+      "type": "string",
+      "title": "Spotify Track ID"
+    },
+    "track_name": {
+      "type": "string",
+      "title": "Track Name"
+    },
+    "artist": {
+      "type": "string",
+      "title": "Artist"
+    },
+    "duration_ms": {
+      "type": "number",
+      "title": "Duration (ms)",
+      "default": 0
+    },
+    "album_cover_url": {
+      "type": "string",
+      "title": "Album Cover URL"
+    },
+    "position": {
+      "type": "number",
+      "title": "Position",
+      "default": 0
+    },
+    "added_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Added At"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "Manual",
+        "Playlist",
+        "Wunschzettel"
+      ],
+      "title": "Source",
+      "default": "Manual"
+    }
+  },
+  "required": [
+    "session_id",
+    "track_id",
+    "track_name"
+  ]
+}
