@@ -124,7 +124,9 @@ Deno.serve(async (req) => {
     if (response.status === 204) return Response.json({ success: true });
     if (!response.ok) {
       const err = await response.text();
-      return Response.json({ error: err, status: response.status }, { status: response.status });
+      // Return 200 with error info to avoid platform converting non-2xx to 500
+      // Frontend handles gracefully via optional chaining / catch blocks
+      return Response.json({ error: err, status: response.status, _notOk: true });
     }
 
     const data = await response.json();

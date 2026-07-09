@@ -18,7 +18,8 @@ Deno.serve(async (req) => {
       'user-read-playback-state',
       'user-modify-playback-state',
       'user-read-currently-playing',
-      'playlist-modify-private'
+      'playlist-modify-private',
+      'user-read-audio-features'
     ].join(' ');
 
     const params = new URLSearchParams({
