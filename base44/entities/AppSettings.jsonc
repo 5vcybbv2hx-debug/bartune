@@ -1,0 +1,50 @@
+{
+  "name": "AppSettings",
+  "type": "object",
+  "properties": {
+    "wunschzettel_active": {
+      "type": "boolean",
+      "title": "Wunschzettel aktiv",
+      "default": false
+    },
+    "wunschzettel_playlist_id": {
+      "type": "string",
+      "title": "Wunschzettel Playlist ID"
+    },
+    "wunschzettel_playlist_name": {
+      "type": "string",
+      "title": "Wunschzettel Playlist Name"
+    },
+    "rotation_block_hours": {
+      "type": "number",
+      "title": "Rotation Sperre (Stunden)",
+      "default": 24
+    },
+    "active_profil_id": {
+      "type": "string",
+      "title": "Aktives Profil ID"
+    },
+    "spotify_access_token": {
+      "type": "string",
+      "title": "Spotify Access Token"
+    },
+    "spotify_refresh_token": {
+      "type": "string",
+      "title": "Spotify Refresh Token"
+    },
+    "spotify_token_expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Token Ablauf"
+    },
+    "spotify_user_name": {
+      "type": "string",
+      "title": "Spotify User Name"
+    },
+    "staff_pin": {
+      "type": "string",
+      "title": "Mitarbeiter PIN"
+    }
+  },
+  "required": []
+}

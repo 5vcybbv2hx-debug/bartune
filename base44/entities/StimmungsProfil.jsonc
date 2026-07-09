@@ -1,0 +1,44 @@
+{
+  "name": "StimmungsProfil",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Name"
+    },
+    "emoji": {
+      "type": "string",
+      "title": "Emoji"
+    },
+    "description": {
+      "type": "string",
+      "title": "Beschreibung"
+    },
+    "playlist_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Playlist IDs",
+      "default": []
+    },
+    "color": {
+      "type": "string",
+      "title": "Farbe",
+      "default": "#B44FFF"
+    },
+    "sort_order": {
+      "type": "number",
+      "title": "Sortierung",
+      "default": 0
+    },
+    "is_active": {
+      "type": "boolean",
+      "title": "Aktiv",
+      "default": false
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

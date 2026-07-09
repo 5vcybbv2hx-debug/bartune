@@ -1,0 +1,49 @@
+{
+  "name": "WunschzettelEintrag",
+  "type": "object",
+  "properties": {
+    "song_title": {
+      "type": "string",
+      "title": "Song Titel"
+    },
+    "artist": {
+      "type": "string",
+      "title": "Interpret"
+    },
+    "spotify_track_id": {
+      "type": "string",
+      "title": "Spotify Track ID"
+    },
+    "track_cover": {
+      "type": "string",
+      "title": "Cover URL"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Ausstehend",
+        "Genehmigt",
+        "Abgelehnt",
+        "Gespielt"
+      ],
+      "title": "Status",
+      "default": "Ausstehend"
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Eingereicht am"
+    },
+    "guest_name": {
+      "type": "string",
+      "title": "Gast Name"
+    }
+  },
+  "required": [
+    "song_title"
+  ],
+  "security": {
+    "public_read": true,
+    "public_create": true
+  }
+}

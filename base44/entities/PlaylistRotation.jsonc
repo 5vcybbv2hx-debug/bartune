@@ -1,0 +1,51 @@
+{
+  "name": "PlaylistRotation",
+  "type": "object",
+  "properties": {
+    "playlist_id": {
+      "type": "string",
+      "title": "Spotify Playlist ID"
+    },
+    "playlist_name": {
+      "type": "string",
+      "title": "Playlist Name"
+    },
+    "playlist_cover": {
+      "type": "string",
+      "title": "Cover URL"
+    },
+    "playlist_track_count": {
+      "type": "number",
+      "title": "Anzahl Songs",
+      "default": 0
+    },
+    "last_played_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Zuletzt gespielt"
+    },
+    "play_count": {
+      "type": "number",
+      "title": "Anzahl Eins\u00e4tze",
+      "default": 0
+    },
+    "blocked_until": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Gesperrt bis"
+    },
+    "profil_id": {
+      "type": "string",
+      "title": "Profil ID"
+    },
+    "manual_block": {
+      "type": "boolean",
+      "title": "Manuell gesperrt",
+      "default": false
+    }
+  },
+  "required": [
+    "playlist_id",
+    "playlist_name"
+  ]
+}
