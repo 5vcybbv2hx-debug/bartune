@@ -13,6 +13,7 @@ import Playlists from './pages/Playlists';
 import ProfileManagement from './pages/Profile';
 import Wunschzettel from './pages/Wunschzettel';
 import SettingsPage from './pages/Settings';
+import Generator from './pages/Generator';
 import SpotifyCallback from './pages/SpotifyCallback';
 import Staff from './pages/Staff';
 import WunschzettelGuest from './pages/WunschzettelGuest';
@@ -62,6 +63,7 @@ const AuthenticatedApp = () => {
           <Route path="/playlists" element={<Playlists />} />
           <Route path="/profile" element={<ProfileManagement />} />
           <Route path="/wunschzettel" element={<Wunschzettel />} />
+          <Route path="/generator" element={<Generator />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>

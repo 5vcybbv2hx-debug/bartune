@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
-import { Music, ListMusic, SlidersHorizontal, ClipboardList, Settings as SettingsIcon } from 'lucide-react';
+import { Music, ListMusic, SlidersHorizontal, ClipboardList, Settings as SettingsIcon, Dices } from 'lucide-react';
 import NowPlayingBar from '@/components/NowPlayingBar';
 import { useSpotifyPlayer } from '@/lib/useSpotifyPlayer';
 import { useSettings } from '@/lib/useSettings';
@@ -10,6 +10,7 @@ const navItems = (wunschzettelActive) => {
     { to: '/', icon: Music, label: 'Cockpit' },
     { to: '/playlists', icon: ListMusic, label: 'Playlists' },
     { to: '/profile', icon: SlidersHorizontal, label: 'Profile' },
+    { to: '/generator', icon: Dices, label: 'Generator' },
   ];
   if (wunschzettelActive) {
     items.push({ to: '/wunschzettel', icon: ClipboardList, label: 'Wunschzettel' });

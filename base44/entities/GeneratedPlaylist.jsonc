@@ -1,0 +1,39 @@
+{
+  "name": "GeneratedPlaylist",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Name"
+    },
+    "spotify_playlist_id": {
+      "type": "string",
+      "title": "Spotify Playlist ID"
+    },
+    "motto": {
+      "type": "string",
+      "title": "Motto"
+    },
+    "energy_level": {
+      "type": "number",
+      "title": "Energie Level"
+    },
+    "song_count": {
+      "type": "number",
+      "title": "Anzahl Songs"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Erstellt am"
+    },
+    "profil_id": {
+      "type": "string",
+      "title": "Profil ID"
+    }
+  },
+  "required": [
+    "name",
+    "spotify_playlist_id"
+  ]
+}
