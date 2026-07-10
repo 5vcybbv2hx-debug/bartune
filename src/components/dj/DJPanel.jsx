@@ -9,8 +9,8 @@ import { useQueue } from '@/lib/useQueue';
 import { useSkipControl } from '@/hooks/useSkipControl';
 
 export default function DJPanel({ player, spotifyConnected, rotation, transitionActive, crossfadeSeconds, onCrossfadeChange, onBpmSort, sorting, wunschzettelActive }) {
-  const { queue, audioFeatures, skipErrorCount, addToQueue, removeFromQueue, reorderQueue, insertAtFront } = useQueue(player, spotifyConnected);
-  const { skipping, hardCut, skipPulse, onSkipPressStart, onSkipPressEnd } = useSkipControl(player, crossfadeSeconds, onCrossfadeChange);
+  const { queue, audioFeatures, skipErrorCount, sessionId, addToQueue, removeFromQueue, reorderQueue, insertAtFront, reload: reloadQueue } = useQueue(player, spotifyConnected);
+  const { skipping, hardCut, skipPulse, onSkipPressStart, onSkipPressEnd } = useSkipControl(player, crossfadeSeconds, sessionId, reloadQueue);
   const [sheetOpen, setSheetOpen] = useState(false);
   const { toast } = useToast();
 

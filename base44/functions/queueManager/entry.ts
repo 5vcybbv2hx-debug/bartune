@@ -59,6 +59,19 @@ Deno.serve(async (req) => {
       queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
       const nextItem = queueItems[0];
 
+      // Double-insert guard: if the currently playing song is already the expected BarTune song,
+      // just clean up the queue entry without re-adding to Spotify
+      if (playback.item.id === nextItem.track_id) {
+        await base44.asServiceRole.entities.BarTuneQueue.delete(nextItem.id);
+        const rest = queueItems.slice(1);
+        if (rest.length > 0) {
+          await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
+            rest.map(item => ({ id: item.id, position: (item.position || 0) - 1 }))
+          );
+        }
+        return Response.json({ advanced: true, track_name: nextItem.track_name, remaining_count: rest.length, reason: 'already_playing' });
+      }
+
       const addResponse = await fetch(`https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${nextItem.track_id}`, {
         method: 'POST',
         headers,
