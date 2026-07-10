@@ -10,19 +10,41 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
   const lastTrackIdRef = useRef(null);
   const prevQueueLengthRef = useRef(0);
   const playerRef = useRef(player);
+  const sessionIdRef = useRef(activeSessionId);
 
   useEffect(() => { playerRef.current = player; }, [player]);
+  useEffect(() => { sessionIdRef.current = activeSessionId; }, [activeSessionId]);
+
+  // Ensure a session exists — auto-create one if missing
+  const ensureSession = useCallback(async () => {
+    if (sessionIdRef.current) return sessionIdRef.current;
+    const newSessionId = (crypto.randomUUID && crypto.randomUUID()) || ('sess_' + Date.now() + '_' + Math.random().toString(36).slice(2));
+    sessionIdRef.current = newSessionId;
+    try {
+      const settings = await base44.entities.AppSettings.list();
+      if (settings.length > 0) {
+        await base44.entities.AppSettings.update(settings[0].id, { active_session_id: newSessionId });
+      }
+    } catch (e) {}
+    return newSessionId;
+  }, []);
 
   const loadQueue = useCallback(async () => {
-    if (!activeSessionId) { setQueue([]); return; }
+    const sid = sessionIdRef.current;
     try {
-      const items = await base44.entities.BarTuneQueue.filter({ session_id: activeSessionId });
+      let items;
+      if (sid) {
+        items = await base44.entities.BarTuneQueue.filter({ session_id: sid });
+      } else {
+        // Fallback: show all entries visible to this user (RLS filters to own records)
+        items = await base44.entities.BarTuneQueue.list();
+      }
       items.sort((a, b) => (a.position || 0) - (b.position || 0));
       setQueue(items);
     } catch (e) {}
-  }, [activeSessionId]);
+  }, []);
 
-  useEffect(() => { loadQueue(); }, [loadQueue]);
+  useEffect(() => { loadQueue(); }, [loadQueue, activeSessionId]);
 
   // Toast when queue becomes empty — Playlist übernimmt
   useEffect(() => {
@@ -46,7 +68,7 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
 
   // Auto-advance polling — queueManager reads session from AppSettings
   useEffect(() => {
-    if (!spotifyConnected || !activeSessionId) return;
+    if (!spotifyConnected) return;
 
     const checkAdvance = async () => {
       const p = playerRef.current;
@@ -63,13 +85,13 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
 
     const interval = setInterval(checkAdvance, 5000);
     return () => clearInterval(interval);
-  }, [spotifyConnected, activeSessionId, loadQueue]);
+  }, [spotifyConnected, loadQueue]);
 
   const addToQueue = useCallback(async (track) => {
-    if (!activeSessionId) return;
+    const sid = await ensureSession();
     const nextPosition = queue.length > 0 ? Math.max(...queue.map(q => q.position || 0)) + 1 : 0;
     await base44.entities.BarTuneQueue.create({
-      session_id: activeSessionId,
+      session_id: sid,
       track_id: track.id,
       track_name: track.name,
       artist: track.artists?.map(a => a.name).join(', ') || '',
@@ -80,7 +102,7 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
       source: 'Manual',
     });
     await loadQueue();
-  }, [queue, activeSessionId, loadQueue]);
+  }, [queue, ensureSession, loadQueue]);
 
   const removeFromQueue = useCallback(async (itemId) => {
     const item = queue.find(q => q.id === itemId);
@@ -106,14 +128,14 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
   }, [queue, loadQueue]);
 
   const insertAtFront = useCallback(async (track) => {
-    if (!activeSessionId) return;
+    const sid = await ensureSession();
     if (queue.length > 0) {
       await base44.entities.BarTuneQueue.bulkUpdate(
         queue.map(q => ({ id: q.id, position: (q.position || 0) + 1 }))
       );
     }
     await base44.entities.BarTuneQueue.create({
-      session_id: activeSessionId,
+      session_id: sid,
       track_id: track.id,
       track_name: track.name,
       artist: track.artists?.map(a => a.name).join(', ') || '',
@@ -124,7 +146,7 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
       source: 'Wunschzettel',
     });
     await loadQueue();
-  }, [queue, activeSessionId, loadQueue]);
+  }, [queue, ensureSession, loadQueue]);
 
-  return { queue, audioFeatures, skipErrorCount, sessionId: activeSessionId, addToQueue, removeFromQueue, reorderQueue, insertAtFront, reload: loadQueue };
+  return { queue, audioFeatures, skipErrorCount, sessionId: sessionIdRef.current, addToQueue, removeFromQueue, reorderQueue, insertAtFront, reload: loadQueue };
 }
