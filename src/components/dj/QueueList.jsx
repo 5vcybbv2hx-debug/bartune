@@ -39,6 +39,11 @@ export default function QueueList({ queue, onReorder, onRemove, onAddClick, play
         <div className="flex items-center gap-2">
           <ListMusic className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-bold">Warteschlange</h3>
+          {queue.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[9px] font-mono font-semibold">
+              🎵 Queue aktiv
+            </span>
+          )}
           <span className="text-xs text-muted-foreground font-mono">({queue.length})</span>
         </div>
         <div className="flex items-center gap-2">

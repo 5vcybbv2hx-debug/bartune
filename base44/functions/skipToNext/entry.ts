@@ -85,6 +85,14 @@ Deno.serve(async (req) => {
         return Response.json({ success: false, error: errText, status: addResponse.status });
       }
 
+      // Set last_queued_track_id to prevent double-push by queueManager polling
+      const skipSettings = await base44.asServiceRole.entities.AppSettings.list();
+      if (skipSettings.length > 0) {
+        await base44.asServiceRole.entities.AppSettings.update(skipSettings[0].id, {
+          last_queued_track_id: nextItem.track_id
+        });
+      }
+
       // 4. Wait for Spotify to process the queue entry
       await new Promise(r => setTimeout(r, 300));
 
@@ -100,8 +108,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 6. Delete queue item, decrement positions
-      await base44.asServiceRole.entities.BarTuneQueue.delete(nextItem.id);
+      // 6. Delete queue item, decrement positions (queueManager may have already cleaned up)
+      try { await base44.asServiceRole.entities.BarTuneQueue.delete(nextItem.id); } catch (_) {}
       const rest = queueItems.slice(1);
       if (rest.length > 0) {
         await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(

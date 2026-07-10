@@ -48,50 +48,84 @@ Deno.serve(async (req) => {
       const pbResponse = await fetch('https://api.spotify.com/v1/me/player', { headers });
       if (!pbResponse.ok) return Response.json({ advanced: false, reason: 'no_playback' });
       const playback = await pbResponse.json();
-      if (!playback?.item || !playback.is_playing) return Response.json({ advanced: false, reason: 'not_playing' });
+      if (!playback?.item) return Response.json({ advanced: false, reason: 'no_playback' });
 
+      const currentTrackId = playback.item.id;
+      const isPlaying = playback.is_playing;
       const remaining = playback.item.duration_ms - playback.progress_ms;
-      if (remaining >= 10000) return Response.json({ advanced: false, reason: 'not_ending' });
 
-      const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
-      if (queueItems.length === 0) return Response.json({ advanced: false, reason: 'queue_empty' });
+      // Load settings for state tracking
+      const settings = await base44.asServiceRole.entities.AppSettings.list();
+      const s = settings[0] || {};
+      let lastQueuedTrackId = s.last_queued_track_id || null;
+      let lastSeenTrackId = s.last_seen_track_id || null;
+      const settingsUpdate = {};
 
+      // Load BarTuneQueue
+      let queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
       queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
-      const nextItem = queueItems[0];
 
-      // Double-insert guard: if the currently playing song is already the expected BarTune song,
-      // just clean up the queue entry without re-adding to Spotify
-      if (playback.item.id === nextItem.track_id) {
-        await base44.asServiceRole.entities.BarTuneQueue.delete(nextItem.id);
-        const rest = queueItems.slice(1);
-        if (rest.length > 0) {
-          await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
-            rest.map(item => ({ id: item.id, position: (item.position || 0) - 1 }))
-          );
+      let didCleanup = false;
+
+      // 1. Song change detection
+      if (currentTrackId !== lastSeenTrackId) {
+        settingsUpdate.last_seen_track_id = currentTrackId;
+
+        if (lastQueuedTrackId) {
+          if (currentTrackId === lastQueuedTrackId) {
+            // Queued song is now playing — clean up BarTuneQueue
+            const playedItem = queueItems.find(q => q.track_id === lastQueuedTrackId);
+            if (playedItem) {
+              await base44.asServiceRole.entities.BarTuneQueue.delete(playedItem.id);
+              const rest = queueItems.filter(q => q.id !== playedItem.id);
+              if (rest.length > 0) {
+                await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
+                  rest.map((item, i) => ({ id: item.id, position: i }))
+                );
+              }
+              didCleanup = true;
+            }
+            settingsUpdate.last_queued_track_id = null;
+            lastQueuedTrackId = null;
+          } else {
+            // Song changed but not to the queued song — reset to avoid blocking
+            settingsUpdate.last_queued_track_id = null;
+            lastQueuedTrackId = null;
+          }
         }
-        return Response.json({ advanced: true, track_name: nextItem.track_name, remaining_count: rest.length, reason: 'already_playing' });
       }
 
-      const addResponse = await fetch(`https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${nextItem.track_id}`, {
-        method: 'POST',
-        headers,
-      });
-
-      if (!addResponse.ok && addResponse.status !== 204) {
-        const errText = await addResponse.text();
-        return Response.json({ advanced: false, reason: 'spotify_error', error: errText, status: addResponse.status });
+      // Reload queue if we just cleaned up
+      if (didCleanup) {
+        queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+        queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
       }
 
-      await base44.asServiceRole.entities.BarTuneQueue.delete(nextItem.id);
-
-      const rest = queueItems.slice(1);
-      if (rest.length > 0) {
-        await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
-          rest.map(item => ({ id: item.id, position: (item.position || 0) - 1 }))
+      // 2. Queue pre-planning: if < 15s remaining and no song queued yet
+      let queuedNew = false;
+      if (queueItems.length > 0 && !lastQueuedTrackId && isPlaying && remaining < 15000 && remaining > 0) {
+        const nextItem = queueItems[0];
+        const addResponse = await fetch(
+          `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${nextItem.track_id}`,
+          { method: 'POST', headers }
         );
+        if (addResponse.ok || addResponse.status === 204) {
+          settingsUpdate.last_queued_track_id = nextItem.track_id;
+          queuedNew = true;
+        }
       }
 
-      return Response.json({ advanced: true, track_name: nextItem.track_name, remaining_count: rest.length });
+      // Save settings if changed
+      if (Object.keys(settingsUpdate).length > 0 && settings.length > 0) {
+        await base44.asServiceRole.entities.AppSettings.update(s.id, settingsUpdate);
+      }
+
+      return Response.json({
+        advanced: didCleanup,
+        queued_new: queuedNew,
+        queue_count: queueItems.length,
+        remaining,
+      });
     }
 
     if (action === 'skipFirst') {

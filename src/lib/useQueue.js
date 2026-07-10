@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
+import { toast } from '@/components/ui/use-toast';
 
 function getSessionId() {
   try {
@@ -21,8 +22,7 @@ export function useQueue(player, spotifyConnected) {
 
   const sessionId = useRef(getSessionId()).current;
   const lastTrackIdRef = useRef(null);
-  const advanceLockRef = useRef(null);
-  const failCountRef = useRef(0);
+  const prevQueueLengthRef = useRef(0);
   const playerRef = useRef(player);
 
   useEffect(() => { playerRef.current = player; }, [player]);
@@ -37,13 +37,19 @@ export function useQueue(player, spotifyConnected) {
 
   useEffect(() => { loadQueue(); }, [loadQueue]);
 
-  // Track change → load audio features + reset locks
+  // Toast when queue becomes empty — Playlist übernimmt
+  useEffect(() => {
+    if (prevQueueLengthRef.current > 0 && queue.length === 0) {
+      toast({ title: 'Queue leer — Playlist übernimmt' });
+    }
+    prevQueueLengthRef.current = queue.length;
+  }, [queue.length]);
+
+  // Track change → load audio features
   useEffect(() => {
     const trackId = player.playback?.item?.id;
     if (!trackId || trackId === lastTrackIdRef.current) return;
     lastTrackIdRef.current = trackId;
-    advanceLockRef.current = null;
-    failCountRef.current = 0;
     setAudioFeatures(null);
 
     base44.functions.invoke('spotifyApi', { action: 'getAudioFeatures', params: { track_id: trackId } })
@@ -51,34 +57,19 @@ export function useQueue(player, spotifyConnected) {
       .catch(() => {});
   }, [player.playback?.item?.id]);
 
-  // Auto-advance polling
+  // Auto-advance polling — BarTune-Queue has priority, backend handles all logic
   useEffect(() => {
     if (!spotifyConnected) return;
 
     const checkAdvance = async () => {
       const p = playerRef.current;
       const pb = p.playback;
-      if (!pb?.item || !pb.is_playing) return;
-
-      const remaining = pb.item.duration_ms - p.progress;
-      if (remaining >= 10000 || remaining <= 0) return;
-      if (advanceLockRef.current === pb.item.id) return;
+      if (!pb?.item) return;
 
       try {
         const res = await base44.functions.invoke('queueManager', { action: 'checkAndAdvance', session_id: sessionId });
-        if (res.data?.advanced) {
-          advanceLockRef.current = pb.item.id;
-          failCountRef.current = 0;
+        if (res.data?.advanced || res.data?.queued_new) {
           loadQueue();
-        } else if (res.data?.reason === 'spotify_error') {
-          failCountRef.current += 1;
-          if (failCountRef.current >= 3) {
-            await base44.functions.invoke('queueManager', { action: 'skipFirst', session_id: sessionId });
-            failCountRef.current = 0;
-            advanceLockRef.current = null;
-            setSkipErrorCount(c => c + 1);
-            loadQueue();
-          }
         }
       } catch (e) {}
     };
