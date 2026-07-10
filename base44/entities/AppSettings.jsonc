@@ -50,10 +50,6 @@
       "title": "Crossfade Sekunden",
       "default": 5
     },
-    "last_queued_track_id": {
-      "type": "string",
-      "title": "Zuletzt eingereihte Track ID"
-    },
     "last_played_track_id": {
       "type": "string",
       "title": "Zuletzt gespielte Track ID"

@@ -30,6 +30,18 @@ async function ensureValidToken(base44) {
   return s.spotify_access_token;
 }
 
+async function pushNextToSpotifyQueue(base44, sessionId, headers) {
+  const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id: sessionId });
+  queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
+  if (queueItems.length === 0) return null;
+  const nextItem = queueItems[0];
+  await fetch(
+    `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${nextItem.track_id}`,
+    { method: 'POST', headers }
+  );
+  return nextItem;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -38,83 +50,64 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const { action, session_id } = body;
-
     if (!session_id) return Response.json({ error: 'Missing session_id' }, { status: 400 });
 
     const token = await ensureValidToken(base44);
     const headers = { 'Authorization': `Bearer ${token}` };
 
     if (action === 'checkAndAdvance') {
+      // SONG-WECHSEL-ERKENNUNG ONLY — no time-based pushing
       const pbResponse = await fetch('https://api.spotify.com/v1/me/player', { headers });
-      if (!pbResponse.ok) return Response.json({ advanced: false, reason: 'no_playback' });
+      if (!pbResponse.ok) return Response.json({ changed: false, reason: 'no_playback' });
       const playback = await pbResponse.json();
-      if (!playback?.item) return Response.json({ advanced: false, reason: 'no_playback' });
+      if (!playback?.item) return Response.json({ changed: false, reason: 'no_playback' });
 
       const currentTrackId = playback.item.id;
-      const isPlaying = playback.is_playing;
-      const remaining = playback.item.duration_ms - playback.progress_ms;
 
-      // Load settings for state tracking
+      // Load state
       const settings = await base44.asServiceRole.entities.AppSettings.list();
       const s = settings[0] || {};
-      const lastQueuedTrackId = s.last_queued_track_id || null;
       const lastPlayedTrackId = s.last_played_track_id || null;
       const settingsUpdate = {};
 
       let didCleanup = false;
 
-      // 1. Song change detection: current_track_id !== last_played_track_id
+      // Song change detected?
       if (currentTrackId !== lastPlayedTrackId) {
-        // 2a. If last_queued_track_id is set AND current matches it → delete from BarTuneQueue
-        if (lastQueuedTrackId && currentTrackId === lastQueuedTrackId) {
-          const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
-          const playedItem = queueItems.find(q => q.track_id === lastQueuedTrackId);
-          if (playedItem) {
-            await base44.asServiceRole.entities.BarTuneQueue.delete(playedItem.id);
-            const rest = queueItems.filter(q => q.id !== playedItem.id).sort((a, b) => (a.position || 0) - (b.position || 0));
-            if (rest.length > 0) {
-              await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
-                rest.map((item, i) => ({ id: item.id, position: i }))
-              );
-            }
-            didCleanup = true;
-          }
-          settingsUpdate.last_queued_track_id = null;
-        }
-        // 2b. Always update last_played_track_id on song change
         settingsUpdate.last_played_track_id = currentTrackId;
-      }
 
-      // 3. Load queue (after potential cleanup) sorted by position
-      let queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
-      queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
+        // Check if the song that just played was the top of BarTuneQueue
+        const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+        queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
 
-      // 4. If queue not empty AND last_queued_track_id is null AND < 15s remaining → queue next song
-      const effectiveLastQueued = settingsUpdate.last_queued_track_id !== undefined ? null : lastQueuedTrackId;
-      let queuedNew = false;
-      if (queueItems.length > 0 && !effectiveLastQueued && isPlaying && remaining < 15000 && remaining > 0) {
-        const nextItem = queueItems[0];
-        const addResponse = await fetch(
-          `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${nextItem.track_id}`,
-          { method: 'POST', headers }
-        );
-        if (addResponse.ok || addResponse.status === 204) {
-          settingsUpdate.last_queued_track_id = nextItem.track_id;
-          queuedNew = true;
+        // If the PREVIOUS song (lastPlayedTrackId) is still in queue at position 0, it was played → delete
+        if (lastPlayedTrackId && queueItems.length > 0 && queueItems[0].track_id === lastPlayedTrackId) {
+          await base44.asServiceRole.entities.BarTuneQueue.delete(queueItems[0].id);
+          const rest = queueItems.slice(1);
+          if (rest.length > 0) {
+            await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
+              rest.map((item, i) => ({ id: item.id, position: i }))
+            );
+          }
+          didCleanup = true;
+        }
+
+        // Push next song as preview (once per song change)
+        if (didCleanup) {
+          await pushNextToSpotifyQueue(base44, session_id, headers);
         }
       }
 
-      // Save settings if changed
       if (Object.keys(settingsUpdate).length > 0 && settings.length > 0) {
         await base44.asServiceRole.entities.AppSettings.update(s.id, settingsUpdate);
       }
 
-      // 5. If queue empty — nothing to do, Spotify playlist takes over
+      // Load final queue count
+      const finalQueue = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
       return Response.json({
-        advanced: didCleanup,
-        queued_new: queuedNew,
-        queue_count: queueItems.length,
-        remaining,
+        changed: currentTrackId !== lastPlayedTrackId,
+        cleaned_up: didCleanup,
+        queue_count: finalQueue.length,
       });
     }
 

@@ -85,16 +85,8 @@ Deno.serve(async (req) => {
         return Response.json({ success: false, error: errText, status: addResponse.status });
       }
 
-      // Set last_queued_track_id to prevent double-push by queueManager polling
-      const skipSettings = await base44.asServiceRole.entities.AppSettings.list();
-      if (skipSettings.length > 0) {
-        await base44.asServiceRole.entities.AppSettings.update(skipSettings[0].id, {
-          last_queued_track_id: nextItem.track_id
-        });
-      }
-
       // 4. Wait for Spotify to process the queue entry
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 500));
 
       // 5. NOW skip — the BarTune song is next in Spotify's queue
       const nextResponse = await fetch('https://api.spotify.com/v1/me/player/next', {
@@ -108,12 +100,17 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 6. Delete queue item, decrement positions (queueManager may have already cleaned up)
+      // 6. Delete queue item, decrement positions
       try { await base44.asServiceRole.entities.BarTuneQueue.delete(nextItem.id); } catch (_) {}
       const rest = queueItems.slice(1);
       if (rest.length > 0) {
         await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
-          rest.map(item => ({ id: item.id, position: (item.position || 0) - 1 }))
+          rest.map((item, i) => ({ id: item.id, position: i }))
+        );
+        // Push next song as preview
+        await fetch(
+          `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${rest[0].track_id}`,
+          { method: 'POST', headers }
         );
       }
 
