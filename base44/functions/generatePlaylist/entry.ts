@@ -141,7 +141,6 @@ Deno.serve(async (req) => {
     if (tracks.length === 0) {
       return Response.json({
         error: 'Keine Songs gefunden — versuche ein allgemeineres Motto auf Englisch (z.B. \'pop hits\', \'party classics\').',
-        debug: { searchTerms, statuses },
         stats: { found: foundCount, afterDecade: afterDecadeCount, filtered: 0 }
       }, { status: 400 });
     }
