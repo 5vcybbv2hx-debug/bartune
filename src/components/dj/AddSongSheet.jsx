@@ -16,6 +16,14 @@ export default function AddSongSheet({ open, onClose, onAdd }) {
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsDesktop(window.matchMedia('(min-width: 768px)').matches);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     if (query.length < 2) {
@@ -68,11 +76,15 @@ export default function AddSongSheet({ open, onClose, onAdd }) {
             onClick={handleClose}
           />
           <motion.div
-            className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl border-t border-border max-h-[70vh] flex flex-col"
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className={`fixed z-50 bg-card flex flex-col ${
+              isDesktop
+                ? 'top-1/2 left-1/2 w-[400px] h-[500px] rounded-2xl border border-border'
+                : 'bottom-0 left-0 right-0 rounded-t-3xl border-t border-border max-h-[70vh]'
+            }`}
+            initial={isDesktop ? { opacity: 0, scale: 0.9, x: '-50%', y: '-50%' } : { y: '100%' }}
+            animate={isDesktop ? { opacity: 1, scale: 1, x: '-50%', y: '-50%' } : { y: 0 }}
+            exit={isDesktop ? { opacity: 0, scale: 0.9, x: '-50%', y: '-50%' } : { y: '100%' }}
+            transition={isDesktop ? { duration: 0.2 } : { type: 'spring', damping: 30, stiffness: 300 }}
           >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-border">
@@ -101,7 +113,7 @@ export default function AddSongSheet({ open, onClose, onAdd }) {
             </div>
 
             {/* Results */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1">
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1" style={{ minHeight: isDesktop ? 300 : undefined }}>
               {query.length < 2 ? (
                 <p className="text-center text-sm text-muted-foreground py-8">
                   Mindestens 2 Zeichen eingeben

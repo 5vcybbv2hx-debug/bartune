@@ -198,6 +198,7 @@ export default function Cockpit() {
             player={player}
             spotifyConnected={spotifyConnected}
             rotation={rotation}
+            wunschzettelActive={settings?.wunschzettel_active}
             transitionActive={transitionActive}
             crossfadeSeconds={crossfadeSeconds}
             onCrossfadeChange={handleCrossfadeChange}

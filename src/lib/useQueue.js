@@ -126,5 +126,25 @@ export function useQueue(player, spotifyConnected) {
     await loadQueue();
   }, [queue, loadQueue]);
 
-  return { queue, audioFeatures, skipErrorCount, sessionId, addToQueue, removeFromQueue, reorderQueue, reload: loadQueue };
+  const insertAtFront = useCallback(async (track) => {
+    if (queue.length > 0) {
+      await base44.entities.BarTuneQueue.bulkUpdate(
+        queue.map(q => ({ id: q.id, position: (q.position || 0) + 1 }))
+      );
+    }
+    await base44.entities.BarTuneQueue.create({
+      session_id: sessionId,
+      track_id: track.id,
+      track_name: track.name,
+      artist: track.artists?.map(a => a.name).join(', ') || '',
+      duration_ms: track.duration_ms || 0,
+      album_cover_url: track.album?.images?.[0]?.url || '',
+      position: 0,
+      added_at: new Date().toISOString(),
+      source: 'Wunschzettel',
+    });
+    await loadQueue();
+  }, [queue, sessionId, loadQueue]);
+
+  return { queue, audioFeatures, skipErrorCount, sessionId, addToQueue, removeFromQueue, reorderQueue, insertAtFront, reload: loadQueue };
 }

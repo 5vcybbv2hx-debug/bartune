@@ -10,8 +10,8 @@ function formatTime(ms) {
   return `${min}:${sec.toString().padStart(2, '0')}`;
 }
 
-export default function NowPlayingCard({ player, audioFeatures, spotifyConnected, crossfadeSeconds, onCrossfadeChange, transitionActive }) {
-  const { playback, progress, loading, play, pause, next, previous, setVolume } = player;
+export default function NowPlayingCard({ player, audioFeatures, spotifyConnected, crossfadeSeconds, onCrossfadeChange, transitionActive, onSkipPressStart, onSkipPressEnd, skipPulse, hardCut, skipping }) {
+  const { playback, progress, loading, play, pause, previous, setVolume } = player;
 
   if (!spotifyConnected) {
     return (
@@ -142,7 +142,7 @@ export default function NowPlayingCard({ player, audioFeatures, spotifyConnected
               className="h-full rounded-full"
               style={{ backgroundColor: 'hsl(var(--primary))' }}
               initial={{ width: 0 }}
-              animate={{ width: `${progressPct}%` }}
+              animate={{ width: `${progressPct}%`, opacity: skipping ? 0.3 : 1 }}
               transition={{ duration: 0.3 }}
             />
           </div>
@@ -172,13 +172,19 @@ export default function NowPlayingCard({ player, audioFeatures, spotifyConnected
             <Play className="w-5 h-5 ml-0.5" fill="currentColor" />
           )}
         </button>
-        <button
-          onClick={next}
-          disabled={loading || noDevice}
-          className="p-2 text-muted-foreground hover:text-foreground transition disabled:opacity-40"
+        <motion.button
+          onPointerDown={onSkipPressStart}
+          onPointerUp={onSkipPressEnd}
+          onPointerLeave={onSkipPressEnd}
+          onPointerCancel={onSkipPressEnd}
+          onContextMenu={(e) => e.preventDefault()}
+          disabled={loading || noDevice || skipping}
+          animate={skipPulse ? { scale: [1, 1.3, 1] } : { scale: 1 }}
+          transition={skipPulse ? { duration: 0.6 } : { duration: 0.2 }}
+          className={`p-2 transition disabled:opacity-40 ${skipPulse ? 'text-primary' : hardCut ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'}`}
         >
           <SkipForward className="w-4 h-4" />
-        </button>
+        </motion.button>
       </div>
 
       {/* Volume */}

@@ -89,6 +89,10 @@ Deno.serve(async (req) => {
         method = 'GET';
         break;
       }
+      case 'getTrack':
+        url = `https://api.spotify.com/v1/tracks/${params.track_id}`;
+        method = 'GET';
+        break;
       case 'getAudioFeatures':
         url = `https://api.spotify.com/v1/audio-features/${params.track_id}`;
         method = 'GET';
