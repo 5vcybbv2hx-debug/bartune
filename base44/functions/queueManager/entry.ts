@@ -1,5 +1,16 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
+async function pushNextToSpotifyQueue(base44, sessionId, headers) {
+  const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id: sessionId });
+  queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
+  if (queueItems.length > 0) {
+    await fetch(
+      `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${queueItems[0].track_id}`,
+      { method: 'POST', headers }
+    );
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -7,39 +18,35 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { action, session_id } = body;
-    if (!session_id) return Response.json({ error: 'Missing session_id' }, { status: 400 });
+    const { action } = body;
 
     const tokenRes = await base44.functions.invoke('getValidSpotifyToken', {});
     const token = tokenRes.data?.access_token;
     const headers = { 'Authorization': `Bearer ${token}` };
 
+    // Get active session from AppSettings — not from request body
+    const settings = await base44.asServiceRole.entities.AppSettings.list();
+    const s = settings[0] || {};
+    const session_id = s.active_session_id;
+    if (!session_id) return Response.json({ changed: false, reason: 'no_active_session' });
+
     if (action === 'checkAndAdvance') {
-      // SONG-WECHSEL-ERKENNUNG ONLY — no time-based pushing
       const pbResponse = await fetch('https://api.spotify.com/v1/me/player', { headers });
       if (!pbResponse.ok) return Response.json({ changed: false, reason: 'no_playback' });
       const playback = await pbResponse.json();
       if (!playback?.item) return Response.json({ changed: false, reason: 'no_playback' });
 
       const currentTrackId = playback.item.id;
-
-      // Load state
-      const settings = await base44.asServiceRole.entities.AppSettings.list();
-      const s = settings[0] || {};
       const lastPlayedTrackId = s.last_played_track_id || null;
       const settingsUpdate = {};
-
       let didCleanup = false;
 
-      // Song change detected?
       if (currentTrackId !== lastPlayedTrackId) {
         settingsUpdate.last_played_track_id = currentTrackId;
 
-        // Check if the song that just played was the top of BarTuneQueue
         const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
         queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
 
-        // If the PREVIOUS song (lastPlayedTrackId) is still in queue at position 0, it was played → delete
         if (lastPlayedTrackId && queueItems.length > 0 && queueItems[0].track_id === lastPlayedTrackId) {
           await base44.asServiceRole.entities.BarTuneQueue.delete(queueItems[0].id);
           const rest = queueItems.slice(1);
@@ -51,7 +58,6 @@ Deno.serve(async (req) => {
           didCleanup = true;
         }
 
-        // Push next song as preview (once per song change)
         if (didCleanup) {
           await pushNextToSpotifyQueue(base44, session_id, headers);
         }
@@ -61,7 +67,6 @@ Deno.serve(async (req) => {
         await base44.asServiceRole.entities.AppSettings.update(s.id, settingsUpdate);
       }
 
-      // Load final queue count
       const finalQueue = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
       return Response.json({
         changed: currentTrackId !== lastPlayedTrackId,

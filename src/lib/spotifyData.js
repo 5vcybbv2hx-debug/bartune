@@ -43,6 +43,13 @@ export async function activateProfile(profile, rotation, settings, player, updat
   }
 
   const now = Date.now();
+
+  // Generate new session ID and clean old queue entries from other sessions
+  const newSessionId = (crypto.randomUUID && crypto.randomUUID()) || ('sess_' + Date.now() + '_' + Math.random().toString(36).slice(2));
+  try {
+    await base44.entities.BarTuneQueue.deleteMany({ session_id: { $ne: newSessionId } });
+  } catch (e) {}
+
   const available = profilePlaylists.filter(r => !r.manual_block && (!r.blocked_until || new Date(r.blocked_until).getTime() < now));
 
   let chosen;
@@ -76,7 +83,7 @@ export async function activateProfile(profile, rotation, settings, player, updat
     profil_id: profile.id,
   });
 
-  await updateSettings({ active_profil_id: profile.id });
+  await updateSettings({ active_profil_id: profile.id, active_session_id: newSessionId });
 
   return { chosen, allBlocked };
 }

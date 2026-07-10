@@ -24,6 +24,10 @@
       "type": "string",
       "title": "Aktives Profil ID"
     },
+    "active_session_id": {
+      "type": "string",
+      "title": "Aktive Session ID"
+    },
     "spotify_access_token": {
       "type": "string",
       "title": "Spotify Access Token"

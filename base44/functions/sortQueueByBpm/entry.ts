@@ -7,9 +7,10 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { session_id } = body;
 
-    if (!session_id) return Response.json({ error: 'Missing session_id' }, { status: 400 });
+    const settingsList = await base44.asServiceRole.entities.AppSettings.list();
+    const session_id = settingsList[0]?.active_session_id;
+    if (!session_id) return Response.json({ success: false, reason: 'no_active_session' });
 
     const tokenRes = await base44.functions.invoke('getValidSpotifyToken', {});
     const token = tokenRes.data?.access_token;
