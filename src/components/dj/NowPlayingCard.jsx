@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Pause, SkipForward, SkipBack, Volume2, Volume1, VolumeX, AlertCircle } from 'lucide-react';
+import SeekBar from '@/components/dj/SeekBar';
 
 function formatTime(ms) {
   if (!ms || ms < 0) return '0:00';
@@ -11,7 +12,7 @@ function formatTime(ms) {
 }
 
 export default function NowPlayingCard({ player, audioFeatures, spotifyConnected, crossfadeSeconds, onCrossfadeChange, transitionActive, onSkipPressStart, onSkipPressEnd, skipPulse, hardCut, skipping }) {
-  const { playback, progress, loading, play, pause, previous, setVolume } = player;
+  const { playback, progress, loading, play, pause, previous, setVolume, seek } = player;
 
   if (!spotifyConnected) {
     return (
@@ -24,7 +25,6 @@ export default function NowPlayingCard({ player, audioFeatures, spotifyConnected
   const item = playback?.item;
   const isPlaying = playback?.is_playing;
   const duration = item?.duration_ms || 0;
-  const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
   const volume = playback?.device?.volume_percent ?? 50;
   const noDevice = !playback?.device;
   const trackId = item?.id || 'none';
@@ -132,22 +132,14 @@ export default function NowPlayingCard({ player, audioFeatures, spotifyConnected
         </div>
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar (seekable) */}
       {item && (
-        <div className="mt-3 flex items-center gap-2">
-          <span className="text-[10px] font-mono text-muted-foreground w-8 text-right">{formatTime(progress)}</span>
-          <div className="flex-1 h-1.5 bg-secondary/50 rounded-full overflow-hidden">
-            <motion.div
-              key={trackId + '-progress'}
-              className="h-full rounded-full"
-              style={{ backgroundColor: 'hsl(var(--primary))' }}
-              initial={{ width: 0 }}
-              animate={{ width: `${progressPct}%`, opacity: skipping ? 0.3 : 1 }}
-              transition={{ duration: 0.3 }}
-            />
-          </div>
-          <span className="text-[10px] font-mono text-muted-foreground w-8">{formatTime(duration)}</span>
-        </div>
+        <SeekBar
+          progress={progress}
+          duration={duration}
+          skipping={skipping}
+          onSeek={seek}
+        />
       )}
 
       {/* Controls */}

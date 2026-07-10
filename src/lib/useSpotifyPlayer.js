@@ -77,5 +77,15 @@ export function useSpotifyPlayer(connected) {
     } catch (e) {}
   }, []);
 
-  return { playback, progress, loading, play, pause, next, previous, setVolume, refresh: fetchPlayback };
+  const seek = useCallback(async (positionMs) => {
+    try {
+      const res = await base44.functions.invoke('seekTrack', { position_ms: positionMs });
+      setProgress(positionMs);
+      return res.data;
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }, []);
+
+  return { playback, progress, loading, play, pause, next, previous, setVolume, seek, refresh: fetchPlayback };
 }
