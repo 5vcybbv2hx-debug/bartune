@@ -54,7 +54,7 @@
       "type": "string",
       "title": "Zuletzt eingereihte Track ID"
     },
-    "last_seen_track_id": {
+    "last_played_track_id": {
       "type": "string",
       "title": "Zuletzt gespielte Track ID"
     }

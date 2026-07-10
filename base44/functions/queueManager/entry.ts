@@ -57,53 +57,42 @@ Deno.serve(async (req) => {
       // Load settings for state tracking
       const settings = await base44.asServiceRole.entities.AppSettings.list();
       const s = settings[0] || {};
-      let lastQueuedTrackId = s.last_queued_track_id || null;
-      let lastSeenTrackId = s.last_seen_track_id || null;
+      const lastQueuedTrackId = s.last_queued_track_id || null;
+      const lastPlayedTrackId = s.last_played_track_id || null;
       const settingsUpdate = {};
-
-      // Load BarTuneQueue
-      let queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
-      queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
 
       let didCleanup = false;
 
-      // 1. Song change detection
-      if (currentTrackId !== lastSeenTrackId) {
-        settingsUpdate.last_seen_track_id = currentTrackId;
-
-        if (lastQueuedTrackId) {
-          if (currentTrackId === lastQueuedTrackId) {
-            // Queued song is now playing — clean up BarTuneQueue
-            const playedItem = queueItems.find(q => q.track_id === lastQueuedTrackId);
-            if (playedItem) {
-              await base44.asServiceRole.entities.BarTuneQueue.delete(playedItem.id);
-              const rest = queueItems.filter(q => q.id !== playedItem.id);
-              if (rest.length > 0) {
-                await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
-                  rest.map((item, i) => ({ id: item.id, position: i }))
-                );
-              }
-              didCleanup = true;
+      // 1. Song change detection: current_track_id !== last_played_track_id
+      if (currentTrackId !== lastPlayedTrackId) {
+        // 2a. If last_queued_track_id is set AND current matches it → delete from BarTuneQueue
+        if (lastQueuedTrackId && currentTrackId === lastQueuedTrackId) {
+          const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+          const playedItem = queueItems.find(q => q.track_id === lastQueuedTrackId);
+          if (playedItem) {
+            await base44.asServiceRole.entities.BarTuneQueue.delete(playedItem.id);
+            const rest = queueItems.filter(q => q.id !== playedItem.id).sort((a, b) => (a.position || 0) - (b.position || 0));
+            if (rest.length > 0) {
+              await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
+                rest.map((item, i) => ({ id: item.id, position: i }))
+              );
             }
-            settingsUpdate.last_queued_track_id = null;
-            lastQueuedTrackId = null;
-          } else {
-            // Song changed but not to the queued song — reset to avoid blocking
-            settingsUpdate.last_queued_track_id = null;
-            lastQueuedTrackId = null;
+            didCleanup = true;
           }
+          settingsUpdate.last_queued_track_id = null;
         }
+        // 2b. Always update last_played_track_id on song change
+        settingsUpdate.last_played_track_id = currentTrackId;
       }
 
-      // Reload queue if we just cleaned up
-      if (didCleanup) {
-        queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
-        queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
-      }
+      // 3. Load queue (after potential cleanup) sorted by position
+      let queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+      queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
 
-      // 2. Queue pre-planning: if < 15s remaining and no song queued yet
+      // 4. If queue not empty AND last_queued_track_id is null AND < 15s remaining → queue next song
+      const effectiveLastQueued = settingsUpdate.last_queued_track_id !== undefined ? null : lastQueuedTrackId;
       let queuedNew = false;
-      if (queueItems.length > 0 && !lastQueuedTrackId && isPlaying && remaining < 15000 && remaining > 0) {
+      if (queueItems.length > 0 && !effectiveLastQueued && isPlaying && remaining < 15000 && remaining > 0) {
         const nextItem = queueItems[0];
         const addResponse = await fetch(
           `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${nextItem.track_id}`,
@@ -120,6 +109,7 @@ Deno.serve(async (req) => {
         await base44.asServiceRole.entities.AppSettings.update(s.id, settingsUpdate);
       }
 
+      // 5. If queue empty — nothing to do, Spotify playlist takes over
       return Response.json({
         advanced: didCleanup,
         queued_new: queuedNew,

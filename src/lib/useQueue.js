@@ -40,7 +40,7 @@ export function useQueue(player, spotifyConnected) {
   // Toast when queue becomes empty — Playlist übernimmt
   useEffect(() => {
     if (prevQueueLengthRef.current > 0 && queue.length === 0) {
-      toast({ title: 'Queue leer — Playlist übernimmt' });
+      toast({ title: '✅ Warteschlange abgespielt — Playlist übernimmt' });
     }
     prevQueueLengthRef.current = queue.length;
   }, [queue.length]);
