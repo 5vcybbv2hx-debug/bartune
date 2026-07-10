@@ -33,11 +33,9 @@ export default function AddSongSheet({ open, onClose, onAdd }) {
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await base44.functions.invoke('spotifyApi', {
-          action: 'searchTracks',
-          params: { query, limit: 15 },
-        });
-        setResults(res.data?.tracks?.items || []);
+        const res = await base44.functions.invoke('searchTracks', { query });
+        const tracks = Array.isArray(res.data) ? res.data : [];
+        setResults(tracks);
       } catch (e) {
         setResults([]);
       }
@@ -49,7 +47,13 @@ export default function AddSongSheet({ open, onClose, onAdd }) {
   const handleAdd = async (track) => {
     setAdding(true);
     try {
-      await onAdd(track);
+      await onAdd({
+        id: track.id,
+        name: track.name,
+        artists: [{ name: track.artist }],
+        duration_ms: track.duration_ms,
+        album: { images: [{ url: track.album_cover_url }] },
+      });
     } finally {
       setAdding(false);
       setQuery('');
@@ -120,7 +124,7 @@ export default function AddSongSheet({ open, onClose, onAdd }) {
                 </p>
               ) : results.length === 0 && !searching ? (
                 <p className="text-center text-sm text-muted-foreground py-8">
-                  Keine Ergebnisse
+                  Keine Ergebnisse für "{query}"
                 </p>
               ) : (
                 results.map(track => (
@@ -130,18 +134,16 @@ export default function AddSongSheet({ open, onClose, onAdd }) {
                     disabled={adding}
                     className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-secondary/50 transition text-left disabled:opacity-50"
                   >
-                    {track.album?.images?.[0]?.url ? (
-                      <img src={track.album.images[0].url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                    {track.album_cover_url ? (
+                      <img src={track.album_cover_url} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
                     ) : (
-                      <div className="w-10 h-10 rounded bg-secondary flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center shrink-0">
                         <span className="text-sm">🎵</span>
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-mono font-semibold truncate">{track.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {track.artists?.map(a => a.name).join(', ')}
-                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
                     </div>
                     <span className="text-xs font-mono text-muted-foreground shrink-0">
                       {formatTime(track.duration_ms)}
