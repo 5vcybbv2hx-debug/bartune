@@ -29,6 +29,7 @@ Deno.serve(async (req) => {
       response_type: 'code',
       redirect_uri: redirectUri,
       scope: scopes,
+      show_dialog: 'true',
     });
 
     const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;

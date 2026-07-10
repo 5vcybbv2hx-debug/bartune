@@ -37,11 +37,12 @@ export default function SettingsPage() {
     setConnecting(true);
     try {
       if (settings?.id) {
-        await updateSettings({
-          spotify_access_token: '',
-          spotify_refresh_token: '',
+        await base44.entities.AppSettings.update(settings.id, {
+          spotify_access_token: null,
+          spotify_refresh_token: null,
           spotify_token_expires_at: null,
         });
+        await reload();
       }
       const res = await base44.functions.invoke('spotifyAuth', {});
       if (res.data?.authUrl) {
