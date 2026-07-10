@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Play, ExternalLink, Music2, AlertCircle } from 'lucide-react';
+import { Play, ExternalLink, Music2, AlertCircle, KeyRound } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import EnergySlider from '@/components/generator/EnergySlider';
 import GeneratorProgress from '@/components/generator/GeneratorProgress';
@@ -31,7 +32,8 @@ function buildSteps(motto, songCount, decades) {
 }
 
 export default function Generator() {
-  const { player, spotifyConnected } = useOutletContext();
+  const { player, spotifyConnected, settings, updateSettings } = useOutletContext();
+  const navigate = useNavigate();
 
   const [motto, setMotto] = useState('');
   const [energyLevel, setEnergyLevel] = useState(3);
@@ -44,6 +46,8 @@ export default function Generator() {
   const [activeStep, setActiveStep] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [needsReauth, setNeedsReauth] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [history, setHistory] = useState([]);
 
   const stepTimerRef = useRef(null);
@@ -79,6 +83,7 @@ export default function Generator() {
     setStatus('generating');
     setActiveStep(0);
     setError('');
+    setNeedsReauth(false);
     setResult(null);
 
     stepTimerRef.current = setInterval(() => {
@@ -110,12 +115,33 @@ export default function Generator() {
         }, 400);
       } else {
         setError(res.data?.error || 'Unbekannter Fehler');
+        setNeedsReauth(!!res.data?.needs_reauth);
         setStatus('error');
       }
     } catch (e) {
       if (stepTimerRef.current) clearInterval(stepTimerRef.current);
       setError(e.response?.data?.error || e.message || 'Fehler bei der Generierung');
+      setNeedsReauth(!!e.response?.data?.needs_reauth);
       setStatus('error');
+    }
+  };
+
+  const handleReconnect = async () => {
+    setReconnecting(true);
+    try {
+      if (settings?.id) {
+        await updateSettings({
+          spotify_access_token: '',
+          spotify_refresh_token: '',
+          spotify_token_expires_at: null,
+        });
+      }
+      const res = await base44.functions.invoke('spotifyAuth', {});
+      if (res.data?.authUrl) {
+        window.location.href = res.data.authUrl;
+      }
+    } catch (e) {
+      navigate('/settings');
     }
   };
 
@@ -165,13 +191,30 @@ export default function Generator() {
   if (status === 'error') {
     return (
       <div className="px-4 py-6 md:px-8 md:py-8 max-w-3xl mx-auto">
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center">
-          <AlertCircle className="w-10 h-10 text-destructive mx-auto mb-3" />
-          <h2 className="text-lg font-bold mb-2">Generierung fehlgeschlagen</h2>
+        <div className={`rounded-2xl border p-6 text-center ${needsReauth ? 'border-accent/30 bg-accent/5' : 'border-destructive/30 bg-destructive/5'}`}>
+          {needsReauth ? (
+            <KeyRound className="w-10 h-10 text-accent mx-auto mb-3" />
+          ) : (
+            <AlertCircle className="w-10 h-10 text-destructive mx-auto mb-3" />
+          )}
+          <h2 className="text-lg font-bold mb-2">
+            {needsReauth ? 'Spotify-Berechtigung fehlt' : 'Generierung fehlgeschlagen'}
+          </h2>
           <p className="text-sm text-muted-foreground mb-4">{error}</p>
-          <button onClick={() => setStatus('idle')} className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium">
-            Zurück zum Formular
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            {needsReauth && (
+              <button
+                onClick={handleReconnect}
+                disabled={reconnecting}
+                className="px-5 py-2.5 rounded-xl bg-accent text-accent-foreground font-medium flex items-center justify-center gap-2"
+              >
+                <KeyRound className="w-4 h-4" /> Spotify neu verbinden
+              </button>
+            )}
+            <button onClick={() => setStatus('idle')} className="px-5 py-2.5 rounded-xl bg-secondary text-foreground font-medium">
+              Zurück zum Formular
+            </button>
+          </div>
         </div>
       </div>
     );

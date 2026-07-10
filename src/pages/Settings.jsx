@@ -32,6 +32,27 @@ export default function SettingsPage() {
     setConnecting(false);
   };
 
+  const handleReconnect = async () => {
+    if (!confirm('Spotify-Verbindung wird getrennt und neu autorisiert. Fortfahren?')) return;
+    setConnecting(true);
+    try {
+      if (settings?.id) {
+        await updateSettings({
+          spotify_access_token: '',
+          spotify_refresh_token: '',
+          spotify_token_expires_at: null,
+        });
+      }
+      const res = await base44.functions.invoke('spotifyAuth', {});
+      if (res.data?.authUrl) {
+        window.location.href = res.data.authUrl;
+      }
+    } catch (e) {
+      alert('Fehler: ' + (e.response?.data?.error || e.message));
+    }
+    setConnecting(false);
+  };
+
   const handleSyncPlaylists = async () => {
     setSyncingPlaylists(true);
     try {
@@ -90,8 +111,8 @@ export default function SettingsPage() {
                 <p className="text-xs text-muted-foreground">Verbunden</p>
               </div>
             </div>
-            <Button variant="outline" onClick={handleConnect} disabled={connecting}>
-              <RefreshCw className={`w-4 h-4 ${connecting ? 'animate-spin' : ''}`} /> Neu verbinden
+            <Button variant="outline" onClick={handleReconnect} disabled={connecting}>
+              <RefreshCw className={`w-4 h-4 ${connecting ? 'animate-spin' : ''}`} /> 🔄 Neu verbinden (Berechtigungen aktualisieren)
             </Button>
           </div>
         ) : (

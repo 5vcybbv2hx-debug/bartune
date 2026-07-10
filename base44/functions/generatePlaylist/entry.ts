@@ -209,6 +209,13 @@ Deno.serve(async (req) => {
 
     if (!createResponse.ok) {
       const err = await createResponse.text();
+      if (createResponse.status === 403) {
+        return Response.json({
+          error: '🔑 Spotify-Berechtigung fehlt — bitte neu verbinden',
+          needs_reauth: true,
+          detail: err
+        }, { status: 403 });
+      }
       return Response.json({ error: 'Playlist-Erstellung fehlgeschlagen: ' + err }, { status: 500 });
     }
 

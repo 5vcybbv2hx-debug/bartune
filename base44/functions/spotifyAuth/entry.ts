@@ -15,11 +15,13 @@ Deno.serve(async (req) => {
     const scopes = [
       'playlist-read-private',
       'playlist-read-collaborative',
+      'playlist-modify-private',
+      'playlist-modify-public',
       'user-read-playback-state',
       'user-modify-playback-state',
       'user-read-currently-playing',
-      'playlist-modify-private',
-      'user-read-audio-features'
+      'ugc-image-upload',
+      'user-library-read'
     ].join(' ');
 
     const params = new URLSearchParams({
