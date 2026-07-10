@@ -15,34 +15,41 @@ Deno.serve(async (req) => {
     let accessToken = s.spotify_access_token;
     const expiresAt = new Date(s.spotify_token_expires_at).getTime();
     const now = Date.now();
-    const fiveMin = 5 * 60 * 1000;
 
-    if (expiresAt < now + fiveMin) {
+    // Token still valid? (5 min buffer)
+    if (now >= expiresAt - 300000) {
       const clientId = Deno.env.get("SPOTIFY_CLIENT_ID");
       const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
+      const credentials = btoa(`${clientId}:${clientSecret}`);
+
       const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: s.spotify_refresh_token,
-          client_id: clientId,
-          client_secret: clientSecret,
-        }),
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `grant_type=refresh_token&refresh_token=${s.spotify_refresh_token}`,
       });
       const tokens = await tokenResponse.json();
-      if (tokens.error) {
-        return Response.json({ error: 'Token refresh failed: ' + tokens.error, needs_reauth: true }, { status: 401 });
+      if (!tokens.access_token) {
+        return Response.json({ error: 'Token refresh failed: ' + JSON.stringify(tokens), needs_reauth: true }, { status: 401 });
       }
 
-      const newExpiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
-      await base44.asServiceRole.entities.AppSettings.update(s.id, {
+      const expiresIn = tokens.expires_in || 3600;
+      const newExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+      const updateData = {
         spotify_access_token: tokens.access_token,
         spotify_token_expires_at: newExpiresAt,
-      });
+      };
+      if (tokens.refresh_token) {
+        updateData.spotify_refresh_token = tokens.refresh_token;
+      }
+      await base44.asServiceRole.entities.AppSettings.update(s.id, updateData);
+
       accessToken = tokens.access_token;
       s.spotify_access_token = tokens.access_token;
       s.spotify_token_expires_at = newExpiresAt;
+      if (tokens.refresh_token) s.spotify_refresh_token = tokens.refresh_token;
     }
 
     return Response.json({
