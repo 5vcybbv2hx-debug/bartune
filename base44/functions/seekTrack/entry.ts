@@ -13,11 +13,35 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'position_ms must be a non-negative number' }, { status: 400 });
     }
 
-    const tokenRes = await base44.functions.invoke('getValidSpotifyToken', {});
-    const token = tokenRes.data?.access_token;
+    const settingsList = await base44.asServiceRole.entities.AppSettings.list();
+    if (!settingsList.length || !settingsList[0].spotify_access_token) {
+      return Response.json({ error: 'Not connected to Spotify' }, { status: 400 });
+    }
+    const s = settingsList[0];
+    let accessToken = s.spotify_access_token;
+    const expiresAt = new Date(s.spotify_token_expires_at).getTime();
+    if (Date.now() >= expiresAt - 300000) {
+      try {
+        const clientId = Deno.env.get("SPOTIFY_CLIENT_ID");
+        const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
+        const credentials = btoa(`${clientId}:${clientSecret}`);
+        const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `grant_type=refresh_token&refresh_token=${s.spotify_refresh_token}`,
+        });
+        const tokens = await tokenResponse.json();
+        if (tokens.access_token) {
+          accessToken = tokens.access_token;
+          const updateData = { spotify_access_token: tokens.access_token, spotify_token_expires_at: new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString() };
+          if (tokens.refresh_token) updateData.spotify_refresh_token = tokens.refresh_token;
+          await base44.asServiceRole.entities.AppSettings.update(s.id, updateData);
+        }
+      } catch (e) {}
+    }
     const response = await fetch(
       `https://api.spotify.com/v1/me/player/seek?position_ms=${Math.floor(position_ms)}`,
-      { method: 'PUT', headers: { Authorization: `Bearer ${token}` } }
+      { method: 'PUT', headers: { Authorization: `Bearer ${accessToken}` } }
     );
 
     if (response.ok) return Response.json({ success: true });

@@ -14,9 +14,29 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Invalid PIN' }, { status: 403 });
     }
 
-    const tokenRes = await base44.functions.invoke('getValidSpotifyToken', {});
-    const token = tokenRes.data?.access_token;
-    const s = tokenRes.data?.settings;
+    const s = appSettings;
+    if (!s.spotify_access_token) return Response.json({ error: 'Not connected to Spotify' }, { status: 400 });
+    let token = s.spotify_access_token;
+    const expiresAt = new Date(s.spotify_token_expires_at).getTime();
+    if (Date.now() >= expiresAt - 300000) {
+      try {
+        const clientId = Deno.env.get("SPOTIFY_CLIENT_ID");
+        const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
+        const credentials = btoa(`${clientId}:${clientSecret}`);
+        const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `grant_type=refresh_token&refresh_token=${s.spotify_refresh_token}`,
+        });
+        const tokens = await tokenResponse.json();
+        if (tokens.access_token) {
+          token = tokens.access_token;
+          const updateData = { spotify_access_token: tokens.access_token, spotify_token_expires_at: new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString() };
+          if (tokens.refresh_token) updateData.spotify_refresh_token = tokens.refresh_token;
+          await base44.asServiceRole.entities.AppSettings.update(s.id, updateData);
+        }
+      } catch (e) {}
+    }
 
     switch (action) {
       case 'getProfiles': {

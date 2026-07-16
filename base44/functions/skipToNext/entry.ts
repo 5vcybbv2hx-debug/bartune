@@ -25,9 +25,31 @@ Deno.serve(async (req) => {
     const session_id = settings.active_session_id;
     if (!session_id) return Response.json({ success: false, noDevice: true });
 
-    const tokenRes = await base44.functions.invoke('getValidSpotifyToken', {});
-    const token = tokenRes.data?.access_token;
-    const headers = { 'Authorization': `Bearer ${token}` };
+    if (!settings.spotify_access_token) {
+      return Response.json({ error: 'Not connected to Spotify' }, { status: 400 });
+    }
+    let accessToken = settings.spotify_access_token;
+    const expiresAt = new Date(settings.spotify_token_expires_at).getTime();
+    if (Date.now() >= expiresAt - 300000) {
+      try {
+        const clientId = Deno.env.get("SPOTIFY_CLIENT_ID");
+        const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
+        const credentials = btoa(`${clientId}:${clientSecret}`);
+        const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `grant_type=refresh_token&refresh_token=${settings.spotify_refresh_token}`,
+        });
+        const tokens = await tokenResponse.json();
+        if (tokens.access_token) {
+          accessToken = tokens.access_token;
+          const updateData = { spotify_access_token: tokens.access_token, spotify_token_expires_at: new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString() };
+          if (tokens.refresh_token) updateData.spotify_refresh_token = tokens.refresh_token;
+          await base44.asServiceRole.entities.AppSettings.update(settings.id, updateData);
+        }
+      } catch (e) {}
+    }
+    const headers = { 'Authorization': `Bearer ${accessToken}` };
 
     const crossfadeSeconds = body.crossfade_seconds ?? settings.crossfade_seconds ?? 5;
     let useFade = !hard_cut && crossfadeSeconds > 0;

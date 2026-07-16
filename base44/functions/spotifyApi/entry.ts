@@ -9,9 +9,50 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, params = {} } = body;
 
-    const tokenRes = await base44.functions.invoke('getValidSpotifyToken', {});
-    const token = tokenRes.data?.access_token;
-    const headers = { 'Authorization': `Bearer ${token}` };
+    // Get token directly from AppSettings instead of function-to-function call
+    const settings = await base44.asServiceRole.entities.AppSettings.list();
+    if (!settings.length || !settings[0].spotify_access_token) {
+      return Response.json({ error: 'Not connected to Spotify', needs_reauth: true }, { status: 400 });
+    }
+
+    let s = settings[0];
+    let accessToken = s.spotify_access_token;
+    const expiresAt = new Date(s.spotify_token_expires_at).getTime();
+    const now = Date.now();
+
+    // Auto-refresh if expired (5 min buffer)
+    if (now >= expiresAt - 300000) {
+      try {
+        const clientId = Deno.env.get("SPOTIFY_CLIENT_ID");
+        const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
+        const credentials = btoa(`${clientId}:${clientSecret}`);
+
+        const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `grant_type=refresh_token&refresh_token=${s.spotify_refresh_token}`,
+        });
+        const tokens = await tokenResponse.json();
+        if (tokens.access_token) {
+          accessToken = tokens.access_token;
+          const updateData = {
+            spotify_access_token: tokens.access_token,
+            spotify_token_expires_at: new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString(),
+          };
+          if (tokens.refresh_token) {
+            updateData.spotify_refresh_token = tokens.refresh_token;
+          }
+          await base44.asServiceRole.entities.AppSettings.update(s.id, updateData);
+        }
+      } catch (e) {
+        // If refresh fails, try the existing token anyway
+      }
+    }
+
+    const headers = { 'Authorization': `Bearer ${accessToken}` };
 
     let url, method, reqBody;
 
@@ -87,12 +128,9 @@ Deno.serve(async (req) => {
 
     const response = await fetch(url, fetchOpts);
 
-    // 204 = success for PUT/POST with no content
     if (response.status === 204) return Response.json({ success: true });
     if (!response.ok) {
       const err = await response.text();
-      // Return 200 with error info to avoid platform converting non-2xx to 500
-      // Frontend handles gracefully via optional chaining / catch blocks
       return Response.json({ error: err, status: response.status, _notOk: true });
     }
 
