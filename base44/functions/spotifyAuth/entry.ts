@@ -13,15 +13,13 @@ Deno.serve(async (req) => {
     const redirectUri = `${origin}/spotify-callback`;
 
     const scopes = [
-      'playlist-read-private',
-      'playlist-read-collaborative',
-      'playlist-modify-private',
       'playlist-modify-public',
+      'playlist-modify-private',
+      'streaming',
       'user-read-playback-state',
       'user-modify-playback-state',
       'user-read-currently-playing',
-      'ugc-image-upload',
-      'user-library-read'
+      'user-read-private'
     ].join(' ');
 
     const params = new URLSearchParams({
