@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 async function fadeVolume(headers, fromVol, toVol, seconds) {
-  const steps = seconds * 2;
+  const steps = Math.max(2, seconds * 2);
   const range = Math.abs(toVol - fromVol);
   const stepSize = Math.max(1, Math.floor(range / steps) || 1);
   const direction = toVol > fromVol ? 1 : -1;
@@ -32,7 +32,6 @@ Deno.serve(async (req) => {
     const crossfadeSeconds = body.crossfade_seconds ?? settings.crossfade_seconds ?? 5;
     let useFade = !hard_cut && crossfadeSeconds > 0;
 
-    // Save current volume for restore after fade
     let originalVolume = 0;
     if (useFade) {
       try {
@@ -45,12 +44,10 @@ Deno.serve(async (req) => {
       if (originalVolume <= 0) useFade = false;
     }
 
-    // Volume fade down
     if (useFade) {
       try { await fadeVolume(headers, originalVolume, 0, crossfadeSeconds); } catch (e) {}
     }
 
-    // Unified: get next from queue (pending only) or fallback to playlist skip
     const allItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
     const queueItems = allItems
       .filter(q => q.status !== 'played')
@@ -58,8 +55,6 @@ Deno.serve(async (req) => {
 
     if (queueItems.length > 0) {
       const nextItem = queueItems[0];
-
-      // Push to Spotify queue FIRST
       const addResponse = await fetch(
         `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${nextItem.track_id}`,
         { method: 'POST', headers }
@@ -71,49 +66,40 @@ Deno.serve(async (req) => {
       }
 
       if (!noDevice) {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 800));
         const nextResponse = await fetch('https://api.spotify.com/v1/me/player/next', { method: 'POST', headers });
         if (!nextResponse.ok && nextResponse.status !== 204) {
           if (nextResponse.status === 404 || nextResponse.status === 403) noDevice = true;
         }
       }
 
-      // Delete from BarTuneQueue, re-index
       try { await base44.asServiceRole.entities.BarTuneQueue.delete(nextItem.id); } catch (_) {}
       const rest = queueItems.slice(1);
       if (rest.length > 0) {
         await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
           rest.map((item, i) => ({ id: item.id, position: i }))
         );
-        // Push next as preview
         try {
           await fetch(`https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${rest[0].track_id}`, { method: 'POST', headers });
         } catch (e) {}
       }
 
-      // Volume fade up
       if (useFade) {
+        await new Promise(r => setTimeout(r, 1200));
         try { await fadeVolume(headers, 0, originalVolume, crossfadeSeconds); } catch (e) {}
       }
 
       if (noDevice) return Response.json({ success: false, noDevice: true });
-
-      return Response.json({
-        success: true,
-        track_name: nextItem.track_name,
-        from_queue: true,
-        remaining_count: rest.length,
-      });
+      return Response.json({ success: true, track_name: nextItem.track_name, from_queue: true, remaining_count: rest.length });
     } else {
-      // Queue empty — normal Spotify skip (playlist continues)
       const nextResponse = await fetch('https://api.spotify.com/v1/me/player/next', { method: 'POST', headers });
       let noDevice = false;
       if (!nextResponse.ok && nextResponse.status !== 204) {
         if (nextResponse.status === 404 || nextResponse.status === 403) noDevice = true;
       }
 
-      // Volume fade up
       if (useFade) {
+        await new Promise(r => setTimeout(r, 1200));
         try { await fadeVolume(headers, 0, originalVolume, crossfadeSeconds); } catch (e) {}
       }
 

@@ -47,7 +47,16 @@ export async function activateProfile(profile, rotation, settings, player, updat
   // Generate new session ID and clean old queue entries from other sessions
   const newSessionId = (crypto.randomUUID && crypto.randomUUID()) || ('sess_' + Date.now() + '_' + Math.random().toString(36).slice(2));
   try {
-    await base44.entities.BarTuneQueue.deleteMany({ session_id: { $ne: newSessionId } });
+    const oldEntries = await base44.entities.BarTuneQueue.list();
+    const twoHoursAgo = now - (2 * 3600000);
+    const stale = oldEntries.filter(q => {
+      if (q.session_id === newSessionId) return false;
+      const createdAt = new Date(q.created_date || q.added_at || twoHoursAgo).getTime();
+      return createdAt < twoHoursAgo;
+    });
+    for (const entry of stale) {
+      try { await base44.entities.BarTuneQueue.delete(entry.id); } catch (e) {}
+    }
   } catch (e) {}
 
   const available = profilePlaylists.filter(r => !r.manual_block && (!r.blocked_until || new Date(r.blocked_until).getTime() < now));

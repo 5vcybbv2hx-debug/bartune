@@ -8,6 +8,7 @@ export default function WunschPanel({ wunschzettelActive, onAccept }) {
   const [requests, setRequests] = useState([]);
   const [slidingOut, setSlidingOut] = useState(null);
   const [accepting, setAccepting] = useState(null);
+  const [confirmingId, setConfirmingId] = useState(null);
   const { toast } = useToast();
 
   const loadRequests = useCallback(async () => {
@@ -28,6 +29,7 @@ export default function WunschPanel({ wunschzettelActive, onAccept }) {
   const handleAccept = async (wunsch) => {
     if (accepting) return;
     setAccepting(wunsch.id);
+    setConfirmingId(null);
     try {
       let track = null;
       if (wunsch.spotify_track_id) {
@@ -130,25 +132,52 @@ export default function WunschPanel({ wunschzettelActive, onAccept }) {
                   </p>
                 </div>
 
-                <button
-                  onClick={() => handleAccept(wunsch)}
-                  disabled={accepting === wunsch.id}
-                  className="p-1.5 rounded-lg bg-success/20 text-success hover:bg-success/30 transition disabled:opacity-50"
-                  title="Annehmen"
-                >
-                  {accepting === wunsch.id ? (
-                    <div className="w-3.5 h-3.5 border-2 border-success/30 border-t-success rounded-full animate-spin" />
-                  ) : (
-                    <Check className="w-3.5 h-3.5" />
-                  )}
-                </button>
-                <button
-                  onClick={() => handleReject(wunsch)}
-                  className="p-1.5 rounded-lg bg-destructive/10 text-destructive/60 hover:bg-destructive/20 hover:text-destructive transition"
-                  title="Ablehnen"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {confirmingId === wunsch.id ? (
+                  <>
+                    <span className="text-[9px] text-accent font-mono shrink-0 animate-pulse">Sicher?</span>
+                    <button
+                      onClick={() => handleAccept(wunsch)}
+                      disabled={accepting === wunsch.id}
+                      className="p-1.5 rounded-lg bg-success/30 text-success hover:bg-success/40 transition disabled:opacity-50 animate-pulse"
+                      title="Bestätigen"
+                    >
+                      {accepting === wunsch.id ? (
+                        <div className="w-3.5 h-3.5 border-2 border-success/30 border-t-success rounded-full animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setConfirmingId(null)}
+                      className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition"
+                      title="Abbrechen"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setConfirmingId(wunsch.id)}
+                      disabled={accepting === wunsch.id}
+                      className="p-1.5 rounded-lg bg-success/20 text-success hover:bg-success/30 transition disabled:opacity-50"
+                      title="Annehmen"
+                    >
+                      {accepting === wunsch.id ? (
+                        <div className="w-3.5 h-3.5 border-2 border-success/30 border-t-success rounded-full animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleReject(wunsch)}
+                      className="p-1.5 rounded-lg bg-destructive/10 text-destructive/60 hover:bg-destructive/20 hover:text-destructive transition"
+                      title="Ablehnen"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
               </motion.div>
             ))}
           </AnimatePresence>

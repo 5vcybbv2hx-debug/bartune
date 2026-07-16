@@ -186,7 +186,7 @@ export default function NowPlayingCard({ player, audioFeatures, spotifyConnected
           type="range"
           min="0"
           max="100"
-          defaultValue={volume}
+          value={volume}
           onChange={(e) => setVolume(parseInt(e.target.value))}
           className="flex-1 accent-primary h-1"
         />

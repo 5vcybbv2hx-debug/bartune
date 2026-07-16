@@ -77,7 +77,7 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
       if (!pb?.item) return;
 
       try {
-        const res = await base44.functions.invoke('queueManager', { action: 'checkAndAdvance' });
+        const res = await base44.functions.invoke('queueManager', { action: 'checkAndAdvance', playback: pb });
         if (res.data?.changed || res.data?.cleaned_up || res.data?.pre_queued) {
           loadQueue();
         }

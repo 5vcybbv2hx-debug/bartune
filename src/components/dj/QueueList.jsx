@@ -19,7 +19,7 @@ function formatDuration(ms) {
 }
 
 export default function QueueList({ queue, onReorder, onRemove, onAddClick, player, rotation, onBpmSort, sorting }) {
-  const items = queue.slice(0, 5);
+  const items = queue;
   const totalQueueMs = queue.reduce((sum, q) => sum + (q.duration_ms || 0), 0);
 
   // Playlist info
@@ -79,7 +79,7 @@ export default function QueueList({ queue, onReorder, onRemove, onAddClick, play
         }}>
           <Droppable droppableId="queue">
             {(provided) => (
-              <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+              <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1 max-h-[400px] overflow-y-auto scrollbar-thin">
                 <AnimatePresence>
                   {items.map((item, index) => (
                     <Draggable key={item.id} draggableId={item.id} index={index}>

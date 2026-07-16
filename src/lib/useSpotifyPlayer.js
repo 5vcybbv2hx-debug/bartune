@@ -5,8 +5,10 @@ export function useSpotifyPlayer(connected) {
   const [playback, setPlayback] = useState(null);
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [noDeviceCount, setNoDeviceCount] = useState(0);
   const pollRef = useRef(null);
   const interpolateRef = useRef(null);
+  const lastPollProgressRef = useRef(0);
 
   const fetchPlayback = useCallback(async () => {
     if (!connected) return;
@@ -14,11 +16,22 @@ export function useSpotifyPlayer(connected) {
       const res = await base44.functions.invoke('spotifyApi', { action: 'getPlaybackState' });
       setPlayback(res.data);
       if (res.data?.item) {
-        setProgress(res.data.progress_ms || 0);
+        const realProgress = res.data.progress_ms || 0;
+        const interpolated = lastPollProgressRef.current;
+        const diff = Math.abs(realProgress - interpolated);
+        if (diff > 3000) {
+          setProgress(realProgress);
+        } else if (realProgress < interpolated) {
+          // keep interpolating, don't jump backwards
+        } else {
+          setProgress(realProgress);
+        }
+        lastPollProgressRef.current = realProgress;
+        setNoDeviceCount(0);
+      } else if (!res.data?.device) {
+        setNoDeviceCount(c => c + 1);
       }
-    } catch (e) {
-      // silent
-    }
+    } catch (e) {}
   }, [connected]);
 
   useEffect(() => {
@@ -81,11 +94,17 @@ export function useSpotifyPlayer(connected) {
     try {
       const res = await base44.functions.invoke('seekTrack', { position_ms: positionMs });
       setProgress(positionMs);
+      lastPollProgressRef.current = positionMs;
       return res.data;
     } catch (e) {
       return { success: false, error: e.message };
     }
   }, []);
 
-  return { playback, progress, loading, play, pause, next, previous, setVolume, seek, refresh: fetchPlayback };
+  const reconnect = useCallback(async () => {
+    setNoDeviceCount(0);
+    await fetchPlayback();
+  }, [fetchPlayback]);
+
+  return { playback, progress, loading, play, pause, next, previous, setVolume, seek, refresh: fetchPlayback, reconnect, noDeviceCount };
 }
