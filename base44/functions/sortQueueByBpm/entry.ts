@@ -33,7 +33,8 @@ Deno.serve(async (req) => {
     } catch (e) {}
 
     // Get queue items
-    const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+    const allQueueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+    const queueItems = allQueueItems.filter(q => q.status !== 'played');
     if (queueItems.length === 0) {
       return Response.json({ success: false, reason: 'queue_empty' });
     }

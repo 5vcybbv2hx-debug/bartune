@@ -39,6 +39,7 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
         // Fallback: show all entries visible to this user (RLS filters to own records)
         items = await base44.entities.BarTuneQueue.list();
       }
+      items = items.filter(q => q.status !== 'played');
       items.sort((a, b) => (a.position || 0) - (b.position || 0));
       setQueue(items);
     } catch (e) {}
@@ -77,7 +78,7 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
 
       try {
         const res = await base44.functions.invoke('queueManager', { action: 'checkAndAdvance' });
-        if (res.data?.changed || res.data?.cleaned_up) {
+        if (res.data?.changed || res.data?.cleaned_up || res.data?.pre_queued) {
           loadQueue();
         }
       } catch (e) {}

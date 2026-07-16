@@ -1,16 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-async function pushNextToSpotifyQueue(base44, sessionId, headers) {
-  const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id: sessionId });
-  queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
-  if (queueItems.length > 0) {
-    await fetch(
-      `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${queueItems[0].track_id}`,
-      { method: 'POST', headers }
-    );
-  }
-}
-
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -40,26 +29,48 @@ Deno.serve(async (req) => {
       const lastPlayedTrackId = s.last_played_track_id || null;
       const settingsUpdate = {};
       let didCleanup = false;
+      let didPreQueue = false;
 
+      // Track changed → clean up "played" items (already pushed to Spotify and consumed)
       if (currentTrackId !== lastPlayedTrackId) {
         settingsUpdate.last_played_track_id = currentTrackId;
 
-        const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
-        queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
+        const allItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+        const playedItems = allItems.filter(q => q.status === 'played');
 
-        if (lastPlayedTrackId && queueItems.length > 0 && queueItems[0].track_id === lastPlayedTrackId) {
-          await base44.asServiceRole.entities.BarTuneQueue.delete(queueItems[0].id);
-          const rest = queueItems.slice(1);
-          if (rest.length > 0) {
-            await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
-              rest.map((item, i) => ({ id: item.id, position: i }))
-            );
-          }
-          didCleanup = true;
+        for (const item of playedItems) {
+          await base44.asServiceRole.entities.BarTuneQueue.delete(item.id);
         }
 
-        if (didCleanup) {
-          await pushNextToSpotifyQueue(base44, session_id, headers);
+        const remaining = allItems.filter(q => q.status !== 'played');
+        if (remaining.length > 0 && playedItems.length > 0) {
+          remaining.sort((a, b) => (a.position || 0) - (b.position || 0));
+          await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
+            remaining.map((item, i) => ({ id: item.id, position: i }))
+          );
+        }
+        didCleanup = playedItems.length > 0;
+      }
+
+      // Pre-emptive queue push: if < 10s remaining, push next pending item to Spotify queue
+      // This ensures queue songs play BEFORE the playlist continues
+      if (playback.item && playback.progress_ms !== undefined && playback.item.duration_ms) {
+        const remainingMs = playback.item.duration_ms - playback.progress_ms;
+        if (remainingMs > 0 && remainingMs < 10000) {
+          const allItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+          const pending = allItems
+            .filter(q => q.status !== 'played')
+            .sort((a, b) => (a.position || 0) - (b.position || 0));
+
+          if (pending.length > 0) {
+            const next = pending[0];
+            await fetch(
+              `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${next.track_id}`,
+              { method: 'POST', headers }
+            );
+            await base44.asServiceRole.entities.BarTuneQueue.update(next.id, { status: 'played' });
+            didPreQueue = true;
+          }
         }
       }
 
@@ -71,19 +82,22 @@ Deno.serve(async (req) => {
       return Response.json({
         changed: currentTrackId !== lastPlayedTrackId,
         cleaned_up: didCleanup,
+        pre_queued: didPreQueue,
         queue_count: finalQueue.length,
       });
     }
 
     if (action === 'skipFirst') {
-      const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
-      if (queueItems.length === 0) return Response.json({ success: false, reason: 'empty' });
-      queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
-      await base44.asServiceRole.entities.BarTuneQueue.delete(queueItems[0].id);
-      const rest = queueItems.slice(1);
+      const allItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+      const pending = allItems
+        .filter(q => q.status !== 'played')
+        .sort((a, b) => (a.position || 0) - (b.position || 0));
+      if (pending.length === 0) return Response.json({ success: false, reason: 'empty' });
+      await base44.asServiceRole.entities.BarTuneQueue.delete(pending[0].id);
+      const rest = pending.slice(1);
       if (rest.length > 0) {
         await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
-          rest.map(item => ({ id: item.id, position: (item.position || 0) - 1 }))
+          rest.map((item, i) => ({ id: item.id, position: i }))
         );
       }
       return Response.json({ success: true, remaining_count: rest.length });

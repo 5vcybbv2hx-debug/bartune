@@ -1,5 +1,16 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
+async function fadeVolume(headers, fromVol, toVol, seconds) {
+  const steps = seconds * 2;
+  const range = Math.abs(toVol - fromVol);
+  const stepSize = Math.max(1, Math.floor(range / steps) || 1);
+  const direction = toVol > fromVol ? 1 : -1;
+  for (let vol = fromVol; direction > 0 ? vol <= toVol : vol >= toVol; vol += direction * stepSize) {
+    await fetch(`https://api.spotify.com/v1/me/player/volume?volume_percent=${Math.max(0, Math.min(100, Math.round(vol)))}`, { method: 'PUT', headers });
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -7,86 +18,85 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { hard_cut, crossfade_seconds } = body;
+    const { hard_cut } = body;
 
     const settingsList = await base44.asServiceRole.entities.AppSettings.list();
-    const session_id = settingsList[0]?.active_session_id;
+    const settings = settingsList[0] || {};
+    const session_id = settings.active_session_id;
     if (!session_id) return Response.json({ success: false, noDevice: true });
 
     const tokenRes = await base44.functions.invoke('getValidSpotifyToken', {});
     const token = tokenRes.data?.access_token;
     const headers = { 'Authorization': `Bearer ${token}` };
 
-    // 1. Set crossfade before skip
-    if (hard_cut) {
-      await fetch('https://api.spotify.com/v1/me/player', {
-        method: 'PUT',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ crossfade_state: false, crossfade_duration_ms: 0 }),
-      });
-      const settings = await base44.asServiceRole.entities.AppSettings.list();
-      if (settings.length > 0) {
-        await base44.asServiceRole.entities.AppSettings.update(settings[0].id, { crossfade_seconds: 0 });
-      }
-      await new Promise(r => setTimeout(r, 200));
-    } else if (crossfade_seconds !== undefined && crossfade_seconds > 0) {
-      await fetch('https://api.spotify.com/v1/me/player', {
-        method: 'PUT',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ crossfade_state: true, crossfade_duration_ms: crossfade_seconds * 1000 }),
-      });
-      await new Promise(r => setTimeout(r, 300));
+    const crossfadeSeconds = body.crossfade_seconds ?? settings.crossfade_seconds ?? 5;
+    let useFade = !hard_cut && crossfadeSeconds > 0;
+
+    // Save current volume for restore after fade
+    let originalVolume = 0;
+    if (useFade) {
+      try {
+        const pbRes = await fetch('https://api.spotify.com/v1/me/player', { headers });
+        if (pbRes.ok) {
+          const pb = await pbRes.json();
+          originalVolume = pb?.device?.volume_percent ?? 0;
+        }
+      } catch (e) {}
+      if (originalVolume <= 0) useFade = false;
     }
 
-    // 2. Get BarTuneQueue items sorted by position
-    const queueItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
-    queueItems.sort((a, b) => (a.position || 0) - (b.position || 0));
+    // Volume fade down
+    if (useFade) {
+      try { await fadeVolume(headers, originalVolume, 0, crossfadeSeconds); } catch (e) {}
+    }
+
+    // Unified: get next from queue (pending only) or fallback to playlist skip
+    const allItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+    const queueItems = allItems
+      .filter(q => q.status !== 'played')
+      .sort((a, b) => (a.position || 0) - (b.position || 0));
 
     if (queueItems.length > 0) {
       const nextItem = queueItems[0];
 
-      // 3. Add to Spotify queue FIRST
+      // Push to Spotify queue FIRST
       const addResponse = await fetch(
         `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${nextItem.track_id}`,
         { method: 'POST', headers }
       );
 
+      let noDevice = false;
       if (!addResponse.ok && addResponse.status !== 204) {
-        if (addResponse.status === 404 || addResponse.status === 403) {
-          return Response.json({ success: false, noDevice: true });
-        }
-        const errText = await addResponse.text();
-        return Response.json({ success: false, error: errText, status: addResponse.status });
+        if (addResponse.status === 404 || addResponse.status === 403) noDevice = true;
       }
 
-      // 4. Wait for Spotify to process the queue entry
-      await new Promise(r => setTimeout(r, 500));
-
-      // 5. NOW skip — the BarTune song is next in Spotify's queue
-      const nextResponse = await fetch('https://api.spotify.com/v1/me/player/next', {
-        method: 'POST',
-        headers,
-      });
-
-      if (!nextResponse.ok && nextResponse.status !== 204) {
-        if (nextResponse.status === 404 || nextResponse.status === 403) {
-          return Response.json({ success: false, noDevice: true });
+      if (!noDevice) {
+        await new Promise(r => setTimeout(r, 500));
+        const nextResponse = await fetch('https://api.spotify.com/v1/me/player/next', { method: 'POST', headers });
+        if (!nextResponse.ok && nextResponse.status !== 204) {
+          if (nextResponse.status === 404 || nextResponse.status === 403) noDevice = true;
         }
       }
 
-      // 6. Delete queue item, decrement positions
+      // Delete from BarTuneQueue, re-index
       try { await base44.asServiceRole.entities.BarTuneQueue.delete(nextItem.id); } catch (_) {}
       const rest = queueItems.slice(1);
       if (rest.length > 0) {
         await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
           rest.map((item, i) => ({ id: item.id, position: i }))
         );
-        // Push next song as preview
-        await fetch(
-          `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${rest[0].track_id}`,
-          { method: 'POST', headers }
-        );
+        // Push next as preview
+        try {
+          await fetch(`https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${rest[0].track_id}`, { method: 'POST', headers });
+        } catch (e) {}
       }
+
+      // Volume fade up
+      if (useFade) {
+        try { await fadeVolume(headers, 0, originalVolume, crossfadeSeconds); } catch (e) {}
+      }
+
+      if (noDevice) return Response.json({ success: false, noDevice: true });
 
       return Response.json({
         success: true,
@@ -95,18 +105,19 @@ Deno.serve(async (req) => {
         remaining_count: rest.length,
       });
     } else {
-      // Queue empty — normal Spotify skip
-      const nextResponse = await fetch('https://api.spotify.com/v1/me/player/next', {
-        method: 'POST',
-        headers,
-      });
-
+      // Queue empty — normal Spotify skip (playlist continues)
+      const nextResponse = await fetch('https://api.spotify.com/v1/me/player/next', { method: 'POST', headers });
+      let noDevice = false;
       if (!nextResponse.ok && nextResponse.status !== 204) {
-        if (nextResponse.status === 404 || nextResponse.status === 403) {
-          return Response.json({ success: false, noDevice: true });
-        }
+        if (nextResponse.status === 404 || nextResponse.status === 403) noDevice = true;
       }
 
+      // Volume fade up
+      if (useFade) {
+        try { await fadeVolume(headers, 0, originalVolume, crossfadeSeconds); } catch (e) {}
+      }
+
+      if (noDevice) return Response.json({ success: false, noDevice: true });
       return Response.json({ success: true, from_queue: false });
     }
   } catch (error) {

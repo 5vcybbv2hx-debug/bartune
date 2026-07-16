@@ -46,6 +46,15 @@
       ],
       "title": "Source",
       "default": "Manual"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "played"
+      ],
+      "title": "Status",
+      "default": "pending"
     }
   },
   "required": [
