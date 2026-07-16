@@ -1,16 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-async function fadeVolume(headers, fromVol, toVol, seconds) {
-  const steps = Math.max(2, seconds * 2);
-  const range = Math.abs(toVol - fromVol);
-  const stepSize = Math.max(1, Math.floor(range / steps) || 1);
-  const direction = toVol > fromVol ? 1 : -1;
-  for (let vol = fromVol; direction > 0 ? vol <= toVol : vol >= toVol; vol += direction * stepSize) {
-    await fetch(`https://api.spotify.com/v1/me/player/volume?volume_percent=${Math.max(0, Math.min(100, Math.round(vol)))}`, { method: 'PUT', headers });
-    await new Promise(r => setTimeout(r, 500));
-  }
-}
-
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -20,10 +9,9 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, playback: clientPlayback } = body;
 
+    // INLINE TOKEN LOGIC — no more function-to-function call
     const settings = await base44.asServiceRole.entities.AppSettings.list();
-    if (!settings.length || !settings[0].spotify_access_token) {
-      return Response.json({ error: 'Not connected to Spotify' }, { status: 400 });
-    }
+    if (!settings.length) return Response.json({ error: 'No settings' }, { status: 400 });
     const s = settings[0];
     let accessToken = s.spotify_access_token;
     const expiresAt = new Date(s.spotify_token_expires_at).getTime();
@@ -64,19 +52,33 @@ Deno.serve(async (req) => {
       const lastPlayedTrackId = s.last_played_track_id || null;
       const settingsUpdate = {};
       let didCleanup = false;
-      let didPreQueue = false;
-      let didAutoSkip = false;
+      let didPush = false;
 
+      // Track changed → clean up played items
       if (currentTrackId !== lastPlayedTrackId) {
         settingsUpdate.last_played_track_id = currentTrackId;
+
         const allItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+        
+        // Mark any "queued" item that matches the current track as "played"
+        const queuedItems = allItems.filter(q => q.status === 'queued');
+        for (const item of queuedItems) {
+          if (item.track_id === currentTrackId) {
+            await base44.asServiceRole.entities.BarTuneQueue.update(item.id, { status: 'played' });
+          }
+        }
+
+        // Delete all played items
         const playedItems = allItems.filter(q => q.status === 'played');
         for (const item of playedItems) {
           await base44.asServiceRole.entities.BarTuneQueue.delete(item.id);
         }
-        const remaining = allItems.filter(q => q.status !== 'played');
+
+        // Reindex remaining
+        const remaining = (await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id }))
+          .filter(q => q.status !== 'played')
+          .sort((a, b) => (a.position || 0) - (b.position || 0));
         if (remaining.length > 0 && playedItems.length > 0) {
-          remaining.sort((a, b) => (a.position || 0) - (b.position || 0));
           await base44.asServiceRole.entities.BarTuneQueue.bulkUpdate(
             remaining.map((item, i) => ({ id: item.id, position: i }))
           );
@@ -84,52 +86,29 @@ Deno.serve(async (req) => {
         didCleanup = playedItems.length > 0;
       }
 
-      if (playback.item && playback.progress_ms !== undefined && playback.item.duration_ms) {
-        const remainingMs = playback.item.duration_ms - playback.progress_ms;
-        if (remainingMs > 0 && remainingMs < 3000) {
-          const allItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
-          const pending = allItems
-            .filter(q => q.status !== 'played')
-            .sort((a, b) => (a.position || 0) - (b.position || 0));
+      // NEW LOGIC: Push the next pending track to Spotify's queue IMMEDIATELY
+      // This way, when the current song ends naturally, Spotify plays our queued track
+      // instead of advancing to the next playlist track. No timing window needed.
+      const allItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
+      const pending = allItems
+        .filter(q => q.status === 'pending')
+        .sort((a, b) => (a.position || 0) - (b.position || 0));
 
-          if (pending.length > 0) {
-            const next = pending[0];
-            const crossfadeSeconds = s.crossfade_seconds || 0;
-            let originalVolume = playback?.device?.volume_percent ?? 0;
-
-            if (crossfadeSeconds > 0 && originalVolume > 0) {
-              try { await fadeVolume(headers, originalVolume, 0, crossfadeSeconds); } catch (e) {}
-            }
-
-            await fetch(
-              `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${next.track_id}`,
-              { method: 'POST', headers }
-            );
-            await new Promise(r => setTimeout(r, 300));
-            await fetch('https://api.spotify.com/v1/me/player/next', { method: 'POST', headers });
-            await base44.asServiceRole.entities.BarTuneQueue.update(next.id, { status: 'played' });
-            didPreQueue = true;
-            didAutoSkip = true;
-
-            if (crossfadeSeconds > 0 && originalVolume > 0) {
-              await new Promise(r => setTimeout(r, 1000));
-              try { await fadeVolume(headers, 0, originalVolume, crossfadeSeconds); } catch (e) {}
-            }
-
-            const updatedItems = await base44.asServiceRole.entities.BarTuneQueue.filter({ session_id });
-            const stillPending = updatedItems
-              .filter(q => q.status !== 'played')
-              .sort((a, b) => (a.position || 0) - (b.position || 0));
-            if (stillPending.length > 0) {
-              try {
-                await fetch(`https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${stillPending[0].track_id}`, { method: 'POST', headers });
-              } catch (e) {}
-            }
-          }
-        }
+      if (pending.length > 0) {
+        const next = pending[0];
+        // Push to Spotify queue — this track will play after the current song ends
+        try {
+          await fetch(
+            `https://api.spotify.com/v1/me/player/queue?uri=spotify:track:${next.track_id}`,
+            { method: 'POST', headers }
+          );
+          // Mark as "queued" so we don't push it again
+          await base44.asServiceRole.entities.BarTuneQueue.update(next.id, { status: 'queued' });
+          didPush = true;
+        } catch (e) {}
       }
 
-      if (Object.keys(settingsUpdate).length > 0 && settings.length > 0) {
+      if (Object.keys(settingsUpdate).length > 0) {
         await base44.asServiceRole.entities.AppSettings.update(s.id, settingsUpdate);
       }
 
@@ -137,9 +116,8 @@ Deno.serve(async (req) => {
       return Response.json({
         changed: currentTrackId !== lastPlayedTrackId,
         cleaned_up: didCleanup,
-        pre_queued: didPreQueue,
-        auto_skipped: didAutoSkip,
-        queue_count: finalQueue.length,
+        pushed: didPush,
+        queue_count: finalQueue.filter(q => q.status !== 'played').length,
       });
     }
 

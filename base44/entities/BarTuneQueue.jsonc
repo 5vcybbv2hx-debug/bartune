@@ -51,6 +51,7 @@
       "type": "string",
       "enum": [
         "pending",
+        "queued",
         "played"
       ],
       "title": "Status",
