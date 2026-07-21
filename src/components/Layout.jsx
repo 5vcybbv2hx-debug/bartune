@@ -84,7 +84,7 @@ export default function Layout() {
 
       <NowPlayingBar player={player} connected={spotifyConnected} />
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-md">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-md pb-safe" style={{ minHeight: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}>
         <div className="flex items-center justify-around py-2">
           {items.map(item => {
             const active = location.pathname === item.to;

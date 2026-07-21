@@ -16,7 +16,7 @@ export default function NowPlayingBar({ player, connected }) {
 
   if (!connected) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card">
+      <div className="fixed left-0 right-0 z-40 border-t border-border bg-card bottom-[calc(56px+env(safe-area-inset-bottom,0px))] md:bottom-0">
         <div className="flex items-center justify-center gap-2 px-4 py-3 text-sm text-muted-foreground">
           <AlertCircle className="w-4 h-4" />
           <span>Verbinde Spotify in den Settings, um Musik zu steuern</span>
@@ -35,9 +35,8 @@ export default function NowPlayingBar({ player, connected }) {
   const VolumeIcon = volume === 0 ? VolumeX : volume < 50 ? Volume1 : Volume2;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur-md md:bottom-0">
-      {/* Mobile nav spacer */}
-      <div className="h-14 md:hidden" />
+    <div className="fixed left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur-md bottom-[calc(56px+env(safe-area-inset-bottom,0px))] md:bottom-0">
+      {/* Mobile nav spacer — no longer needed, bar sits above tab bar */}
 
       {noDevice && (
         <div className="flex items-center justify-center gap-2 px-4 py-2 text-xs text-accent border-b border-border">

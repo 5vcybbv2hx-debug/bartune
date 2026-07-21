@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Check, RefreshCw, QrCode, Download, RotateCcw, Trash, KeyRound, ExternalLink } from 'lucide-react';
+import { Check, RefreshCw, QrCode, Download, RotateCcw, Trash, KeyRound, ExternalLink, UserX } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { ensureDefaultProfiles } from '@/lib/useSettings';
@@ -18,6 +18,9 @@ export default function SettingsPage() {
   const [resetting, setResetting] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [profiles, setProfiles] = useState([]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteStep, setDeleteStep] = useState(1);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -86,6 +89,22 @@ export default function SettingsPage() {
     }
     await updateSettings({ active_profil_id: null });
     setClearing(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteStep === 1) {
+      setDeleteStep(2);
+      return;
+    }
+    setDeletingAccount(true);
+    try {
+      if (typeof base44.auth.deleteAccount === 'function') {
+        await base44.auth.deleteAccount();
+      }
+      await base44.auth.logout('/register');
+    } catch (e) {
+      try { await base44.auth.logout('/register'); } catch (_) {}
+    }
   };
 
   useEffect(() => {
@@ -265,8 +284,52 @@ export default function SettingsPage() {
           >
             <Trash className="w-4 h-4" /> Neuer Abend starten (Rotationsdaten löschen)
           </button>
+          <button
+            onClick={() => { setDeleteStep(1); setShowDeleteDialog(true); }}
+            className="w-full flex items-center gap-2 px-4 py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-medium hover:bg-destructive/20 transition"
+          >
+            <UserX className="w-4 h-4" /> Konto unwiderruflich löschen
+          </button>
         </div>
       </Section>
+
+      {showDeleteDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full">
+            {deleteStep === 1 ? (
+              <>
+                <h3 className="text-lg font-bold mb-2">Konto wirklich löschen?</h3>
+                <p className="text-sm text-muted-foreground mb-5">
+                  Dies kann nicht rückgängig gemacht werden. Alle deine Daten und Einstellungen gehen verloren.
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => { setShowDeleteDialog(false); setDeleteStep(1); }}>
+                    Abbrechen
+                  </Button>
+                  <Button className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => setDeleteStep(2)}>
+                    Weiter
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-bold mb-2">Letzte Bestätigung</h3>
+                <p className="text-sm text-muted-foreground mb-5">
+                  Bist du absolut sicher? Nach dem Löschen gibt es kein Zurück mehr.
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" disabled={deletingAccount} onClick={() => { setShowDeleteDialog(false); setDeleteStep(1); }}>
+                    Abbrechen
+                  </Button>
+                  <Button className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deletingAccount} onClick={handleDeleteAccount}>
+                    {deletingAccount ? 'Wird gelöscht…' : 'Endgültig löschen'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

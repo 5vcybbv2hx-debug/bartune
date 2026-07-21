@@ -89,9 +89,11 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
   }, [spotifyConnected, loadQueue]);
 
   const addToQueue = useCallback(async (track) => {
-    const sid = await ensureSession();
+    const sid = sessionIdRef.current || ('temp_' + Date.now());
     const nextPosition = queue.length > 0 ? Math.max(...queue.map(q => q.position || 0)) + 1 : 0;
-    await base44.entities.BarTuneQueue.create({
+    const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const newItem = {
+      id: tempId,
       session_id: sid,
       track_id: track.id,
       track_name: track.name,
@@ -101,21 +103,40 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
       position: nextPosition,
       added_at: new Date().toISOString(),
       source: 'Manual',
-    });
-    await loadQueue();
-  }, [queue, ensureSession, loadQueue]);
+      status: 'pending',
+    };
+    // Optimistic: show immediately
+    setQueue(prev => [...prev, newItem]);
+    // Persist to DB
+    try {
+      const realSid = await ensureSession();
+      const created = await base44.entities.BarTuneQueue.create({ ...newItem, session_id: realSid });
+      setQueue(prev => prev.map(q => q.id === tempId ? { ...created, position: nextPosition } : q));
+    } catch (e) {
+      setQueue(prev => prev.filter(q => q.id !== tempId));
+    }
+  }, [queue, ensureSession]);
 
   const removeFromQueue = useCallback(async (itemId) => {
     const item = queue.find(q => q.id === itemId);
     if (!item) return;
-    await base44.entities.BarTuneQueue.delete(itemId);
-    const after = queue.filter(q => (q.position || 0) > (item.position || 0));
-    if (after.length > 0) {
-      await base44.entities.BarTuneQueue.bulkUpdate(
-        after.map(q => ({ id: q.id, position: (q.position || 0) - 1 }))
-      );
+    // Optimistic: remove and reindex locally
+    const reindexed = queue
+      .filter(q => q.id !== itemId)
+      .sort((a, b) => (a.position || 0) - (b.position || 0))
+      .map((q, i) => ({ ...q, position: i }));
+    setQueue(reindexed);
+    // Persist to DB
+    try {
+      await base44.entities.BarTuneQueue.delete(itemId);
+      if (reindexed.length > 0) {
+        await base44.entities.BarTuneQueue.bulkUpdate(
+          reindexed.map((q, i) => ({ id: q.id, position: i }))
+        );
+      }
+    } catch (e) {
+      await loadQueue();
     }
-    await loadQueue();
   }, [queue, loadQueue]);
 
   const reorderQueue = useCallback(async (fromIndex, toIndex) => {
@@ -123,9 +144,16 @@ export function useQueue(player, spotifyConnected, activeSessionId) {
     const newQueue = [...queue];
     const [moved] = newQueue.splice(fromIndex, 1);
     newQueue.splice(toIndex, 0, moved);
-    const updates = newQueue.map((item, i) => ({ id: item.id, position: i }));
-    await base44.entities.BarTuneQueue.bulkUpdate(updates);
-    await loadQueue();
+    const reindexed = newQueue.map((item, i) => ({ ...item, position: i }));
+    // Optimistic: update immediately
+    setQueue(reindexed);
+    // Persist to DB
+    try {
+      const updates = reindexed.map((item, i) => ({ id: item.id, position: i }));
+      await base44.entities.BarTuneQueue.bulkUpdate(updates);
+    } catch (e) {
+      await loadQueue();
+    }
   }, [queue, loadQueue]);
 
   const insertAtFront = useCallback(async (track) => {
