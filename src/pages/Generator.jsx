@@ -129,18 +129,14 @@ export default function Generator() {
   const handleReconnect = async () => {
     setReconnecting(true);
     try {
-      if (settings?.id) {
-        await updateSettings({
-          spotify_access_token: '',
-          spotify_refresh_token: '',
-          spotify_token_expires_at: null,
-        });
-      }
       const res = await base44.functions.invoke('spotifyAuth', {});
       if (res.data?.authUrl) {
         window.location.href = res.data.authUrl;
+      } else {
+        setReconnecting(false);
       }
     } catch (e) {
+      setReconnecting(false);
       navigate('/settings');
     }
   };

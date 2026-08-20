@@ -29,7 +29,12 @@ export default function SpotifyCallback() {
       })
       .catch((e) => {
         setStatus('error');
-        setError(e.response?.data?.error || e.message || 'Unbekannter Fehler');
+        const apiError = e.response?.data?.error || e.message || 'Unbekannter Fehler';
+        const redirectUriUsed = e.response?.data?.redirect_uri_used;
+        const redirectHint = redirectUriUsed
+          ? `\n\nVerwendete Redirect-URI:\n${redirectUriUsed}\n\nDiese Redirect-URI muss exakt im Spotify Developer Dashboard unter "Redirect URIs" eingetragen sein.`
+          : '';
+        setError(apiError + redirectHint);
       });
   }, []);
 

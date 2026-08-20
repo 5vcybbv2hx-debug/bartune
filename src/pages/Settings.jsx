@@ -36,25 +36,19 @@ export default function SettingsPage() {
   };
 
   const handleReconnect = async () => {
-    if (!confirm('Spotify-Verbindung wird getrennt und neu autorisiert. Fortfahren?')) return;
+    if (!confirm('Spotify wird neu autorisiert. Fortfahren?')) return;
     setConnecting(true);
     try {
-      if (settings?.id) {
-        await base44.entities.AppSettings.update(settings.id, {
-          spotify_access_token: null,
-          spotify_refresh_token: null,
-          spotify_token_expires_at: null,
-        });
-        await reload();
-      }
       const res = await base44.functions.invoke('spotifyAuth', {});
       if (res.data?.authUrl) {
         window.location.href = res.data.authUrl;
+      } else {
+        setConnecting(false);
       }
     } catch (e) {
       alert('Fehler: ' + (e.response?.data?.error || e.message));
+      setConnecting(false);
     }
-    setConnecting(false);
   };
 
   const handleSyncPlaylists = async () => {

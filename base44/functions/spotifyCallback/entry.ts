@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     });
 
     const tokens = await tokenResponse.json();
-    if (tokens.error) return Response.json({ error: tokens.error_description || tokens.error }, { status: 400 });
+    if (tokens.error) return Response.json({ error: tokens.error_description || tokens.error, redirect_uri_used: redirectUri }, { status: 400 });
 
     // Get user profile for display name
     const profileResponse = await fetch('https://api.spotify.com/v1/me', {
