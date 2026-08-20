@@ -25,7 +25,7 @@ export default function SettingsPage() {
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      const res = await base44.functions.invoke('spotifyAuth', {});
+      const res = await base44.functions.invoke('spotifyAuth', { origin: window.location.origin });
       if (res.data?.authUrl) {
         window.location.href = res.data.authUrl;
       }
@@ -39,7 +39,7 @@ export default function SettingsPage() {
     if (!confirm('Spotify wird neu autorisiert. Fortfahren?')) return;
     setConnecting(true);
     try {
-      const res = await base44.functions.invoke('spotifyAuth', {});
+      const res = await base44.functions.invoke('spotifyAuth', { origin: window.location.origin });
       if (res.data?.authUrl) {
         window.location.href = res.data.authUrl;
       } else {

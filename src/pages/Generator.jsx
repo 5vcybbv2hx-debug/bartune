@@ -129,7 +129,7 @@ export default function Generator() {
   const handleReconnect = async () => {
     setReconnecting(true);
     try {
-      const res = await base44.functions.invoke('spotifyAuth', {});
+      const res = await base44.functions.invoke('spotifyAuth', { origin: window.location.origin });
       if (res.data?.authUrl) {
         window.location.href = res.data.authUrl;
       } else {

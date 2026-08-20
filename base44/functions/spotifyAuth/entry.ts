@@ -9,7 +9,8 @@ Deno.serve(async (req) => {
     const clientId = Deno.env.get("SPOTIFY_CLIENT_ID");
     if (!clientId) return Response.json({ error: 'SPOTIFY_CLIENT_ID not set' }, { status: 500 });
 
-    const origin = req.headers.get("origin") || `https://${req.headers.get("host")}`;
+    const body = await req.json();
+    const origin = body.origin || req.headers.get("origin") || `https://${req.headers.get("host")}`;
     const redirectUri = `${origin}/spotify-callback`;
 
     const scopes = [

@@ -23,7 +23,7 @@ export default function SpotifyCallback() {
       return;
     }
 
-    base44.functions.invoke('spotifyCallback', { code })
+    base44.functions.invoke('spotifyCallback', { code, origin: window.location.origin })
       .then(() => {
         window.location.href = '/settings';
       })

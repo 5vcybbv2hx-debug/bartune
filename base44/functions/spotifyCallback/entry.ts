@@ -7,15 +7,14 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { code } = body;
+    const { code, origin } = body;
     if (!code) return Response.json({ error: 'Missing code' }, { status: 400 });
 
     const clientId = Deno.env.get("SPOTIFY_CLIENT_ID");
     const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
     if (!clientId || !clientSecret) return Response.json({ error: 'Spotify credentials not set' }, { status: 500 });
 
-    const origin = req.headers.get("origin") || `https://${req.headers.get("host")}`;
-    const redirectUri = `${origin}/spotify-callback`;
+    const redirectUri = `${origin || req.headers.get("origin") || `https://${req.headers.get("host")}`}/spotify-callback`;
 
     const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
